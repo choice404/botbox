@@ -2,6 +2,8 @@
 
 A discord bot template generator to help create discord bots quickly and easily
 
+![](./readme_assets/botbox_showcase.gif)
+
 ## Table of Contents
 
 - [About](#about)
