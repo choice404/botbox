@@ -1,6 +1,6 @@
 # Bot Box
 
-A general-purpose Discord bot designed to serve as a template or starting point for building more specialized bots.
+A discord bot template generator to help create discord bots quickly and easily
 
 ## Table of Contents
 
