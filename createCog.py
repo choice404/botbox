@@ -20,7 +20,7 @@ def main() -> int:
 """)
         createCog()
     except FileNotFoundError:
-        ("config.json not found, please use the projectInit.py script first.")
+        ("config.json not found, please use the initialize.py script first.")
         return 1
 
     updateMain()
