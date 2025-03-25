@@ -28,7 +28,7 @@ A general-purpose Discord bot designed to serve as a template or starting point 
 
 - Slash command support via `discord.ext.commands`
 - Automated cog generation with `createCog.py`
-- Project initialization with `.env` and `config.json` via `projectInit.py`
+- Project initialization with `.env` and `config.json` via `initialize.py`
 - Auto-regeneration of `main.py` to match active cogs
 - Easily extendable and modular design
 
@@ -39,8 +39,8 @@ A general-purpose Discord bot designed to serve as a template or starting point 
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/your-username/choicebot.git
-   cd choicebot
+   git clone https://github.com/your-username/botbox.git
+   cd botbox
    ```
 
 2. **Initialize the project**
@@ -92,7 +92,7 @@ Defines the bot name, command prefix, and active cogs:
 ```json
 {
   "bot": {
-    "name": "ChoiceBot",
+    "name": "botbox",
     "command_prefix": "!"
     "author": "Austin \"Choice404\" Choi"
     "description": "The bot description"
