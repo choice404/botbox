@@ -1,6 +1,6 @@
 # Bot Box
 
-A discord bot template generator to help create discord bots quickly and easily
+Make the discord bot of your dreams.
 
 ![](./readme_assets/botbox_showcase.gif)
 
@@ -21,6 +21,8 @@ A discord bot template generator to help create discord bots quickly and easily
 ---
 
 ## About
+
+A discord bot template generator to help create discord bots quickly and easily. Forget about the boilerplate and focus on what really matters, what your bot will do.
 
 **Bot Box** is built using Python and `discord.py`, offering a boilerplate codebase for quickly building Discord bot projects. It includes a cog-based architecture, `.env` management, and built-in utilities for automating bot configuration and extension development.
 
@@ -155,6 +157,24 @@ This file was generated using pipreqs to help make installing modules simple. If
 - **Token errors?** Make sure your `.env` file is present and properly formatted.
 
 ---
+
+## TODO
+- [ ] Refactor?
+  - [ ] Considering refactoring this into a golang cli tool or some other low level compiled language.
+  - [ ] Maybe a npm cli tool for this?
+    - [ ] If so then should use discord.js library instead of discord.py
+- [ ] Expand config.json to include the following
+  - [ ] More details about each command provided to the createCog script
+  - [ ] Expected bot response
+- [ ] Linting script inputs for any potential errors before creating any files
+- [ ] Should also run pipreqs when creating new files to update pip dependencies
+
+
+---
+
+## Version History
+
+- 1.0.0 - Initial version which includes basic features such as generate basic boilerplate code for cogs and the main file
 
 ## License
 
