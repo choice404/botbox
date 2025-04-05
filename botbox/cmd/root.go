@@ -1,6 +1,5 @@
 /*
 Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-
 */
 package cmd
 
@@ -10,20 +9,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-
-
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "botbox",
 	Short: "A CLI tool to help create and manage a cog based discord.py bot",
-	Long: ` A discord bot template generator to help create discord
+	Long: `
+A discord bot template generator to help create discord
 bots quickly and easily. Forget about the boilerplate
 and focus on what really matters, what your bot will do.
 
-**Bot Box** is built using Python and `discord.py`,
+**Bot Box** is built using Python and 'discord.py',
 offering a boilerplate codebase for quickly building
 Discord bot projects. It includes a cog-based architecture,
-`.env` management, and built-in utilities for automating
+'.env' management, and built-in utilities for automating
 bot configuration and extension development.
 `,
 	// Uncomment the following line if your bare application
@@ -49,7 +47,5 @@ func init() {
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
-
-

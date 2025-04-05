@@ -1,0 +1,16 @@
+{
+    "bot": {
+        "name": "test",
+        "command_prefix": "!",
+        "author": "austin",
+        "description": "a bot"
+    },
+    "cogs": [
+        {
+            "name": "HelloWorld",
+            "commands": [
+                "hello"
+            ]
+        }
+    ]
+}
