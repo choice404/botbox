@@ -175,7 +175,7 @@ func addCogs(filename string) error {
 	className := strings.ToUpper(string(filename[0])) + filename[1:]
 
 	_, err = fmt.Fprintf(file, `"""
-Bot Author %s
+Author %s
 
 %s
 %s

@@ -2,8 +2,6 @@
 
 Make the discord bot of your dreams.
 
-![](./readme_assets/botbox_showcase.gif)
-
 ## Table of Contents
 
 - [About](#about)
