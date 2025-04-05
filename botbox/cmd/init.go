@@ -475,7 +475,7 @@ Bot Author {config['bot']['author']}
 
 %s
 %s
-\"""
+"""
 
 import discord
 from discord import app_commands
