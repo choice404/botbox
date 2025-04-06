@@ -38,7 +38,32 @@ A discord bot template generator to help create discord bots quickly and easily.
 
 ## Installation
 
-### TBD (Will publish on package managers, for now you can build using the go compiler)
+### macOS
+```
+brew install choice404/tap/botbox
+```
+
+### Windows/Linux (macOS alternative)
+This method will require that the user installs go
+
+It is recommended to use the [golang documentation](https://go.dev/doc/install) for installation
+
+Or alternatively use the following commands for
+**Linux/macOS**
+```
+curl -sS https://webi.sh/golang | sh; \
+source ~/.config/envman/PATH.env
+```
+**Windows**
+```
+curl.exe https://webi.ms/golang | powershell
+```
+
+After this do the following command
+```
+go install choice404/tap/botbox@latest
+```
+
 
 ## Usage
 
@@ -139,6 +164,10 @@ Defines the bot name, command prefix, and active cogs:
 
 - 1.0.0 - Initial version which includes basic features such as generate basic boilerplate code for cogs and the main file
 - 2.0.0 - A major refactor of the project in golang. Scrapped python for this...
+- 2.0.1 - Github releases using goreleaser
+- 2.0.2 - Brew release through taps and updated the imports to use github in the project
+- 2.0.3 - Updated the CLI form so custom prefixes are single non-alphanumeric characters only
+- 2.0.4 - Updated README.md to include instructions on how to install botbox cli and updated imports with v2
 
 ## License
 
