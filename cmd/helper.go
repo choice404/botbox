@@ -1,66 +1,33 @@
-/*
-Copyright © 2025 Austin "Choice404" Choi
-See end of file for extended copyright information
-*/
-
 package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/huh/spinner"
-	"github.com/spf13/cobra"
 )
-
-type LicenseResponse struct {
-	Body string `json:"body"`
-}
 
 var (
-	botName        string
-	botDescription string
-	botAuthor      string
-	botPrefix      string
-	botToken       string
-	botGuild       string
-	envChoice      string
-	dopplerProject string
-	dopplerEnv     string
-	licenseType    string
-	licenseChoice  bool
-	licenseText    string
+	botName                string
+	botDescription         string
+	botAuthor              string
+	botPrefix              string
+	botTokenDopplerProject string
+	botGuildDopplerEnv     string
+	envChoice              string
+	licenseType            string
+	licenseChoice          bool
+	licenseText            string
 )
 
-// initCmd represents the init command
-var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initializes a Bot Box project",
-	Long: `Initializes a Bot Box project in the current directory and prompts the user for information about the bot as well as setup other default configurations in a botbox.conf file.
-  Will also create the initial project strucutre
-  /
-  |- README.md
-  |- botbox.conf
-  |- run.sh
-  |- ?LICENSE
-  |- ?doppler.yaml
-  |- src/
-     |- main.py |- cogs/
-        |- __init__.py
-        |- helloWorld.py
-`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("init called")
-		botBoxInit()
-	},
-}
-
-func botBoxInit() {
+func Banner() {
 	fmt.Println(`
     ____        __     ____            
    / __ )____  / /_   / __ )____  _  __
@@ -68,7 +35,47 @@ func botBoxInit() {
  / /_/ / /_/ / /_   / /_/ / /_/ />  <  
 /_____/\\____/\\__/  /_____/\\____/_/|_|  
   `)
+}
 
+func FindBotConf() (string, error) {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	originalDir := currentDir
+
+	for {
+		confDir := filepath.Join(currentDir)
+
+		_, err := os.Stat(filepath.Join(confDir, "botbox.conf"))
+		if err == nil {
+			confPath, err := filepath.Abs(filepath.Join(confDir, "botbox.conf"))
+			if err != nil {
+				return "", fmt.Errorf("failed to get absolute path of %s: %w", confPath, err)
+			}
+
+			return confDir, nil
+		}
+
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("error checking file %s: %w", confDir, err)
+		}
+
+		parentDir := filepath.Dir(currentDir)
+
+		if parentDir == currentDir {
+			break
+		}
+
+		currentDir = parentDir
+	}
+
+	return "", fmt.Errorf("Not a botbox project: %s", originalDir)
+}
+
+func BotBoxCreate(actionCallback func()) {
+	Banner()
 	botBoxConfigForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
@@ -84,14 +91,18 @@ func botBoxInit() {
 				Title("Enter the author of your bot").
 				Prompt("> ").
 				Value(&botAuthor),
+
 			huh.NewInput().
 				Title("Enter the command prefix for your bot (default: '!')").
 				Prompt("> ").
-				Value(&botPrefix),
+				Value(&botPrefix).
+				Validate(func(s string) error {
+					if s == "" {
+						botPrefix = "!"
+					}
+					return nil
+				}),
 		),
-	)
-
-	botBoxEnvForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("How do you want to handle environment variables?").
@@ -100,48 +111,34 @@ func botBoxInit() {
 					huh.NewOption("Use Doppler", "doppler"),
 				).
 				Value(&envChoice),
-		),
-	)
-	botBoxLicenceForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Do you want to add a license?").
-				Affirmative("yes").
-				Negative("no").
-				Value(&licenseChoice),
-		),
-	)
-	envForm := huh.NewForm(
-		huh.NewGroup(
 			huh.NewInput().
-				Title("Enter the bot token").
+				// Title("Enter the bot token").
+				TitleFunc(func() string {
+					if envChoice == "env" {
+						return "Enter the bot token"
+					}
+					return "Enter the Doppler project name"
+				}, &envChoice).
 				Prompt("> ").
 				Validate(func(s string) error {
-					if len(s) < 10 {
-						return fmt.Errorf("token is too short")
+					if envChoice == "env" {
+						if len(s) < 10 {
+							return fmt.Errorf("token is too short")
+						}
 					}
 					return nil
 				}).
-				Value(&botToken),
+				Value(&botTokenDopplerProject),
 			huh.NewInput().
-				Title("Enter the bot guild ID").
+				TitleFunc(func() string {
+					if envChoice == "env" {
+						return "Enter the bot guild ID"
+					}
+					return "Enter the Doppler environment name"
+				}, &envChoice).
 				Prompt("> ").
-				Value(&botGuild),
+				Value(&botGuildDopplerEnv),
 		),
-	)
-	dopplerForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Enter the Doppler project name").
-				Prompt("> ").
-				Value(&dopplerProject),
-			huh.NewInput().
-				Title("Enter the Doppler environment name").
-				Prompt("> ").
-				Value(&dopplerEnv),
-		),
-	)
-	licenceForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("What license do you want to use?").
@@ -158,29 +155,10 @@ func botBoxInit() {
 	)
 
 	botBoxConfigForm.Run()
-	botBoxEnvForm.Run()
-
-	if envChoice == "env" {
-		envForm.Run()
-	} else if envChoice == "doppler" {
-		dopplerForm.Run()
-	}
-
-	botBoxLicenceForm.Run()
-
-	if licenseChoice {
-		licenceForm.Run()
-		var err error
-		licenseText, err = fetchLicense(licenseType)
-		if err != nil {
-			fmt.Println("Error fetching license:", err)
-			return
-		}
-	}
 
 	err := spinner.New().
 		Title("Creating project structure...").
-		Action(createProjectStructure).
+		Action(actionCallback).
 		Run()
 
 	if err != nil {
@@ -189,14 +167,67 @@ func botBoxInit() {
 	}
 }
 
-func createProjectStructure() {
+func FetchLicense(licenseKey string) (string, error) {
+	if licenseKey == "" || licenseKey == "none" {
+		return "", fmt.Errorf("no license key provided or selected 'none'")
+	}
+
+	apiURL := fmt.Sprintf("https://api.github.com/licenses/%s", licenseKey)
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request to %s: %w", apiURL, err)
+	}
+
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("User-Agent", "bot-box")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch license %s: %w", licenseKey, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to fetch license %s: status %s, body: %s",
+			licenseKey, resp.Status, string(bodyBytes))
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body for %s: %w", licenseKey, err)
+	}
+
+	var licenseResp LicenseResponse
+	err = json.Unmarshal(bodyBytes, &licenseResp)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse JSON response for %s: %w", licenseKey, err)
+	}
+
+	if licenseResp.Body == "" {
+		return "", fmt.Errorf("no license body found in response for %s", licenseKey)
+	}
+
+	return licenseResp.Body, nil
+}
+
+func CreateProject(rootDir string) {
+	if rootDir[len(rootDir)-1:] != "/" {
+		rootDir += "/"
+	}
+
 	directories := []string{
 		"src",
 		"src/cogs",
 	}
 
-	if confOpt, err := createFileOption("botbox.conf"); err == nil && confOpt {
-		confFile, err := os.Create("botbox.conf")
+	if confOpt, err := CreateFileOption(rootDir + "botbox.conf"); err == nil && confOpt {
+		confFile, err := os.Create(rootDir + "botbox.conf")
 		if err != nil {
 			fmt.Printf("Error creating botbox.conf file: %v\n", err)
 			return
@@ -207,16 +238,17 @@ func createProjectStructure() {
     "name": "%s",
     "command_prefix": "%s",
     "author": "%s",
-    "description": "%s"
+    "description": "%s" 
   },
   "cogs": [
     {
-      "name": "helloWorld",
+      "name": "HelloWorld",
+      "file": "helloWorld",
       "commands": [
           "hello"
       ]
-    ]
-  }
+    }
+  ]
 }`, botName, botPrefix, botAuthor, botDescription)
 	} else if err == nil && !confOpt {
 		fmt.Println("Not overriding botbox.conf file.")
@@ -225,8 +257,8 @@ func createProjectStructure() {
 		return
 	}
 
-	if readmeOpt, err := createFileOption("README.md"); err == nil && readmeOpt {
-		readmeFile, err := os.Create("README.md")
+	if readmeOpt, err := CreateFileOption(rootDir + "README.md"); err == nil && readmeOpt {
+		readmeFile, err := os.Create(rootDir + "README.md")
 		if err != nil {
 			fmt.Printf("Error creating README.md file: %v\n", err)
 			return
@@ -248,8 +280,6 @@ func createProjectStructure() {
 
 ### Author
 %s
-### License
-%s
 
 ## Installation
 1. Clone the repository
@@ -269,7 +299,7 @@ This project is licensed under the %s License - see the [LICENSE](LICENSE) file 
 ## Contributors
 
 - %s
-`, botName, botDescription, botAuthor, licenseType, licenseType, botAuthor)
+`, botName, botDescription, botAuthor, licenseType, botAuthor)
 		if err != nil {
 			fmt.Printf("Error writing to README.md file: %v\n", err)
 			return
@@ -281,28 +311,37 @@ This project is licensed under the %s License - see the [LICENSE](LICENSE) file 
 		return
 	}
 
-	if licenseOpt, err := createFileOption("LICENSE"); err == nil && licenseOpt {
-		licenseFile, err := os.Create("LICENSE")
-		if err != nil {
+	if licenseChoice {
+		if licenseOpt, err := CreateFileOption(rootDir + "LICENSE"); err == nil && licenseOpt {
+			licenseFile, err := os.Create(rootDir + "LICENSE")
+			if err != nil {
+				fmt.Printf("Error creating LICENSE file: %v\n", err)
+				return
+			}
+			defer licenseFile.Close()
+			licenseText, err = FetchLicense(licenseType)
+
+			if err != nil {
+				fmt.Printf("Error fetching license text: %v\n", err)
+				return
+			}
+
+			_, err = fmt.Fprint(licenseFile, licenseText)
+			if err != nil {
+				fmt.Printf("Error writing to LICENSE file: %v\n", err)
+				return
+			}
+		} else if err == nil && !licenseOpt {
+			fmt.Println("Not overriding LICENSE file.")
+		} else {
 			fmt.Printf("Error creating LICENSE file: %v\n", err)
 			return
 		}
-		defer licenseFile.Close()
-		_, err = fmt.Fprint(licenseFile, licenseText)
-		if err != nil {
-			fmt.Printf("Error writing to LICENSE file: %v\n", err)
-			return
-		}
-	} else if err == nil && !licenseOpt {
-		fmt.Println("Not overriding LICENSE file.")
-	} else {
-		fmt.Printf("Error creating LICENSE file: %v\n", err)
-		return
 	}
 
 	if envChoice == "doppler" {
-		if dopplerOpt, err := createFileOption("doppler.yaml"); err == nil && dopplerOpt {
-			dopplerFile, err := os.Create("doppler.yaml")
+		if dopplerOpt, err := CreateFileOption(rootDir + "doppler.yaml"); err == nil && dopplerOpt {
+			dopplerFile, err := os.Create(rootDir + "doppler.yaml")
 			if err != nil {
 				fmt.Printf("Error creating doppler.yaml file: %v\n", err)
 				return
@@ -311,7 +350,7 @@ This project is licensed under the %s License - see the [LICENSE](LICENSE) file 
 			_, err = fmt.Fprintf(dopplerFile, `setup:
   - project: %s
     config: %s
-`, dopplerProject, dopplerEnv)
+`, botTokenDopplerProject, botGuildDopplerEnv)
 		} else if err == nil && !dopplerOpt {
 			fmt.Println("Not overriding doppler.yaml file.")
 		} else {
@@ -319,8 +358,8 @@ This project is licensed under the %s License - see the [LICENSE](LICENSE) file 
 			return
 		}
 	} else if envChoice == "env" {
-		if envOpt, err := createFileOption(".env"); err == nil && envOpt {
-			envFile, err := os.Create(".env")
+		if envOpt, err := CreateFileOption(rootDir + ".env"); err == nil && envOpt {
+			envFile, err := os.Create(rootDir + ".env")
 			if err != nil {
 				fmt.Printf("Error creating .env file: %v\n", err)
 				return
@@ -328,7 +367,7 @@ This project is licensed under the %s License - see the [LICENSE](LICENSE) file 
 			defer envFile.Close()
 			_, err = fmt.Fprintf(envFile, `DISCORD_TOKEN=%s
 DISCORD_GUILD=%s
-`, botToken, botGuild)
+`, botTokenDopplerProject, botGuildDopplerEnv)
 			if err != nil {
 				fmt.Printf("Error writing to .env file: %v\n", err)
 				return
@@ -346,8 +385,8 @@ DISCORD_GUILD=%s
 		return
 	}
 
-	if runOpt, err := createFileOption("run.sh"); err == nil && runOpt {
-		runFile, err := os.Create("run.sh")
+	if runOpt, err := CreateFileOption(rootDir + "run.sh"); err == nil && runOpt {
+		runFile, err := os.Create(rootDir + "run.sh")
 		if err != nil {
 			fmt.Printf("Error creating run.sh file: %v\n", err)
 			return
@@ -366,7 +405,7 @@ python3 src/main.py
 			fmt.Printf("Error writing to run.sh file: %v\n", err)
 			return
 		}
-		err = os.Chmod("run.sh", 0755)
+		err = os.Chmod(rootDir+"run.sh", 0755)
 		if err != nil {
 			fmt.Printf("Error setting permissions for run.sh file: %v\n", err)
 			return
@@ -379,20 +418,21 @@ python3 src/main.py
 	}
 
 	for _, dir := range directories {
-		err := os.MkdirAll(dir, os.ModePerm)
+		err := os.MkdirAll(rootDir+dir, os.ModePerm)
 		if err != nil {
 			fmt.Printf("Error creating directory %s: %v\n", dir, err)
 			return
 		}
 	}
 
-	mainFile, err := os.Create("src/main.py")
-	if err != nil {
-		fmt.Printf("Error creating main.py file: %v\n", err)
-		return
-	}
-	defer mainFile.Close()
-	_, err = fmt.Fprint(mainFile, `"""
+	if mainOpt, err := CreateFileOption(rootDir + "src/main.py"); err == nil && mainOpt {
+		mainFile, err := os.Create(rootDir + "src/main.py")
+		if err != nil {
+			fmt.Printf("Error creating main.py file: %v\n", err)
+			return
+		}
+		defer mainFile.Close()
+		_, err = fmt.Fprint(mainFile, `"""
 Copyright © 2025 Austin "Choice404" Choi
 See end of file for extended copyright information
 """
@@ -454,24 +494,26 @@ This code is licensed under the MIT License.
 https://github.com/choice404/botbox/license
 """
 `)
-	if err != nil {
-		fmt.Printf("Error writing to main.py file: %v\n", err)
-		return
-	}
-	err = os.Chmod("src/main.py", 0755)
-	if err != nil {
-		fmt.Printf("Error setting permissions for main.py file: %v\n", err)
-		return
+		if err != nil {
+			fmt.Printf("Error writing to main.py file: %v\n", err)
+			return
+		}
+		err = os.Chmod(rootDir+"src/main.py", 0755)
+		if err != nil {
+			fmt.Printf("Error setting permissions for main.py file: %v\n", err)
+			return
+		}
 	}
 
-	helloWorldFile, err := os.Create("src/cogs/helloWorld.py")
-	if err != nil {
-		fmt.Printf("Error creating helloWorld.py file: %v\n", err)
-		return
-	}
-	defer helloWorldFile.Close()
-	_, err = fmt.Fprintf(helloWorldFile, `"""
-Bot Author {config['bot']['author']}
+	if helloWorldOpt, err := CreateFileOption(rootDir + "src/cogs/helloWorld.py"); err == nil && helloWorldOpt {
+		helloWorldFile, err := os.Create(rootDir + "src/cogs/helloWorld.py")
+		if err != nil {
+			fmt.Printf("Error creating helloWorld.py file: %v\n", err)
+			return
+		}
+		defer helloWorldFile.Close()
+		_, err = fmt.Fprintf(helloWorldFile, `"""
+Bot Author %s
 
 %s
 %s
@@ -506,29 +548,32 @@ class HelloWorld(commands.Cog):
         except Exception as e:
             print(f"Error: {e}")
             await interaction.response.send_message(f"Error: {e}", ephemeral=True)
-`, botName, botDescription)
+  `, botAuthor, botName, botDescription)
 
-	if err != nil {
-		fmt.Printf("Error writing to helloWorld.py file: %v\n", err)
-		return
+		if err != nil {
+			fmt.Printf("Error writing to helloWorld.py file: %v\n", err)
+			return
+		}
+		err = os.Chmod(rootDir+"src/cogs/helloWorld.py", 0755)
+		if err != nil {
+			fmt.Printf("Error setting permissions for helloWorld.py file: %v\n", err)
+			return
+		}
 	}
-	err = os.Chmod("src/cogs/helloWorld.py", 0755)
-	if err != nil {
-		fmt.Printf("Error setting permissions for helloWorld.py file: %v\n", err)
-		return
+
+	if initOpt, err := CreateFileOption(rootDir + "src/cogs/__init__.py"); err == nil && initOpt {
+		_, err := os.Create(rootDir + "src/cogs/__init__.py")
+		if err != nil {
+			fmt.Printf("Error creating __init__.py file: %v\n", err)
+			return
+		}
 	}
 
 	fmt.Println("Project structure created successfully!")
 
-	_, err = os.Create("src/cogs/__init__.py")
-	if err != nil {
-		fmt.Printf("Error creating __init__.py file: %v\n", err)
-		return
-	}
-
 }
 
-func createFileOption(filename string) (bool, error) {
+func CreateFileOption(filename string) (bool, error) {
 	var override bool
 	formTitle := fmt.Sprintf("The file %s already exists. Do you want to override it?", filename)
 	overrideForm := huh.NewForm(
@@ -551,65 +596,25 @@ func createFileOption(filename string) (bool, error) {
 	return true, nil
 }
 
-func fetchLicense(licenseKey string) (string, error) {
-	if licenseKey == "" || licenseKey == "none" {
-		return "", fmt.Errorf("no license key provided or selected 'none'")
-	}
+func LoadConfig() (Config, error) {
+	var cfg Config
 
-	apiURL := fmt.Sprintf("https://api.github.com/licenses/%s", licenseKey)
-
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	req, err := http.NewRequest("GET", apiURL, nil)
+	confDir, err := FindBotConf()
 	if err != nil {
-		return "", fmt.Errorf("failed to create request to %s: %w", apiURL, err)
+		return cfg, fmt.Errorf("failed to find config directory: %w", err)
 	}
 
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("User-Agent", "bot-box")
+	confPath := filepath.Join(confDir, "botbox.conf")
 
-	resp, err := client.Do(req)
+	jsonData, err := os.ReadFile(confPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch license %s: %w", licenseKey, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("failed to fetch license %s: status %s, body: %s",
-			licenseKey, resp.Status, string(bodyBytes))
+		return cfg, fmt.Errorf("failed to read config file %s: %w", confPath, err)
 	}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	err = json.Unmarshal(jsonData, &cfg)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response body for %s: %w", licenseKey, err)
+		return cfg, fmt.Errorf("failed to parse config JSON from %s: %w", confPath, err)
 	}
 
-	var licenseResp LicenseResponse
-	err = json.Unmarshal(bodyBytes, &licenseResp)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse JSON response for %s: %w", licenseKey, err)
-	}
-
-	if licenseResp.Body == "" {
-		return "", fmt.Errorf("no license body found in response for %s", licenseKey)
-	}
-
-	return licenseResp.Body, nil
+	return cfg, nil
 }
-
-func init() {
-	rootCmd.AddCommand(initCmd)
-}
-
-/*
-Copyright © 2025 2025 Austin "Choice404" Choi
-
-Bot Box
-A discord bot template generator to help create discord bots quickly and easily
-
-This code is licensed under the MIT License.
-Please see the LICENSE file in the root directory of this project for the full license details.
-*/

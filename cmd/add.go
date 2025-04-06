@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,37 +12,6 @@ import (
 
 	"github.com/spf13/cobra"
 )
-
-type BotConfig struct {
-	Name          string `json:"name"`
-	CommandPrefix string `json:"command_prefix"`
-	Author        string `json:"author"`
-	Description   string `json:"description"`
-}
-
-type CogConfig struct {
-	Name     string   `json:"name"`
-	File     string   `json:"file"`
-	Commands []string `json:"commands"`
-}
-
-type Config struct {
-	BotInfo BotConfig   `json:"bot"`
-	Cogs    []CogConfig `json:"cogs"`
-}
-
-type CommandInfo struct {
-	Name        string
-	Description string
-	Args        []ArgInfo
-	ReturnType  string
-}
-
-type ArgInfo struct {
-	Name        string
-	Type        string
-	Description string
-}
 
 var addCmd = &cobra.Command{
 	Use:   "add",
@@ -59,71 +27,10 @@ var addCmd = &cobra.Command{
 	},
 }
 
-func findBotConf() (string, error) {
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	originalDir := currentDir
-
-	for {
-		confPath := filepath.Join(currentDir, "botbox.conf")
-
-		_, err := os.Stat(confPath)
-		if err == nil {
-			return confPath, nil
-		}
-
-		if !errors.Is(err, os.ErrNotExist) {
-			return "", fmt.Errorf("error checking file %s: %w", confPath, err)
-		}
-
-		parentDir := filepath.Dir(currentDir)
-
-		if parentDir == currentDir {
-			break
-		}
-
-		currentDir = parentDir
-	}
-
-	return "", fmt.Errorf("Not a botbox project: %s", originalDir)
-}
-
-func loadConfig() (Config, error) {
-	var cfg Config
-
-	confDir, err := findBotConf()
-	if err != nil {
-		return cfg, fmt.Errorf("failed to find config directory: %w", err)
-	}
-
-	confPath := filepath.Join(confDir, "botbox.conf")
-
-	jsonData, err := os.ReadFile(confPath)
-	if err != nil {
-		return cfg, fmt.Errorf("failed to read config file %s: %w", confPath, err)
-	}
-
-	err = json.Unmarshal(jsonData, &cfg)
-	if err != nil {
-		return cfg, fmt.Errorf("failed to parse config JSON from %s: %w", confPath, err)
-	}
-
-	return cfg, nil
-}
-
 func addCogs(filename string) error {
-	rootDir, err := findBotConf()
-	config, err := loadConfig()
-	fmt.Println(`
-    ____        __     ____            
-   / __ )____  / /_   / __ )____  _  __
-  / __  / __ \\/ __/  / __  / __ \\| |/_/
- / /_/ / /_/ / /_   / /_/ / /_/ />  <  
-/_____/\\____/\\__/  /_____/\\____/_/|_|  
-  `)
+	rootDir, err := FindBotConf()
+	config, err := LoadConfig()
+	Banner()
 
 	if filename == "" {
 		fmt.Println("Eenter the cog name:")

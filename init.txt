@@ -1,5 +1,0 @@
-Bot Box
-A discord bot template generator to help create discord bots quickly and easily
-Austin \"Choice404\" Choi
-go
-mit
