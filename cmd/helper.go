@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"unicode"
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/huh/spinner"
@@ -102,6 +103,14 @@ func BotBoxCreate(actionCallback func()) {
 				Prompt("> ").
 				Value(&botPrefix).
 				Validate(func(s string) error {
+					if len(s) > 1 {
+						return fmt.Errorf("command prefix must be a single character")
+					}
+					r := []rune(s)[0]
+
+					if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+						return fmt.Errorf("command prefix must be an alphanumeric character")
+					}
 					if s == "" {
 						botPrefix = "!"
 					}
