@@ -29,7 +29,6 @@ var (
 	botGuildDopplerEnv     string
 	envChoice              string
 	licenseType            string
-	licenseChoice          bool
 	licenseText            string
 )
 
@@ -108,8 +107,8 @@ func BotBoxCreate(actionCallback func()) {
 					}
 					r := []rune(s)[0]
 
-					if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
-						return fmt.Errorf("command prefix must be an alphanumeric character")
+					if unicode.IsLetter(r) || unicode.IsDigit(r) {
+						return fmt.Errorf("command prefix can not be an alphanumeric character")
 					}
 					if s == "" {
 						botPrefix = "!"
@@ -325,7 +324,7 @@ This project is licensed under the %s License - see the [LICENSE](LICENSE) file 
 		return
 	}
 
-	if licenseChoice {
+	if licenseType != "no-license" && licenseType != "" {
 		if licenseOpt, err := CreateFileOption(rootDir + "LICENSE"); err == nil && licenseOpt {
 			licenseFile, err := os.Create(rootDir + "LICENSE")
 			if err != nil {
