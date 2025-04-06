@@ -5,7 +5,7 @@ See end of file for extended copyright information
 
 package main
 
-import "botbox/cmd"
+import "github.com/choice404/botbox/cmd"
 
 func main() {
 	cmd.Execute()
