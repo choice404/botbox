@@ -1,8 +1,6 @@
 # Bot Box
 
-A discord bot template generator to help create discord bots quickly and easily
-
-![](./readme_assets/botbox_showcase.gif)
+Make the discord bot of your dreams.
 
 ## Table of Contents
 
@@ -22,15 +20,17 @@ A discord bot template generator to help create discord bots quickly and easily
 
 ## About
 
-**Bot Box** is built using Python and `discord.py`, offering a boilerplate codebase for quickly building Discord bot projects. It includes a cog-based architecture, `.env` management, and built-in utilities for automating bot configuration and extension development.
+A discord bot template generator to help create discord bots quickly and easily. Forget about the boilerplate and focus on what really matters, what your bot will do.
+
+**Bot Box** is built using GO, cobra-cli, and huh, offering a intuitive cli tool to quickly build Discord bot projects. It includes a cog-based architecture, `.env` management, and built-in utilities for automating bot configuration and extension development.
 
 ---
 
 ## Features
 
 - Slash command support via `discord.ext.commands`
-- Automated cog generation with `createCog.py`
-- Project initialization with `.env` and `config.json` via `initialize.py`
+- Automated cog generation
+- Project initialization with `.env` and `botbox.conf`
 - Auto-regeneration of `main.py` to match active cogs
 - Easily extendable and modular design
 
@@ -38,40 +38,44 @@ A discord bot template generator to help create discord bots quickly and easily
 
 ## Installation
 
-1. **Clone the repository**
-
-   ```bash
-   git clone https://github.com/your-username/botbox.git
-   cd botbox
-   ```
-
-2. **Initialize the project**
-
-   Run the following script to set up your `.env` and `config.json` files:
-
-   ```bash
-   python3 initialize.py
-   ```
-
-3. **Install dependencies**
-
-   If not done during initialization, install manually with:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
----
+### TBD (Will publish on package managers, for now you can build using the go compiler)
 
 ## Usage
 
-Once configured, you can start the bot using:
-
-```bash
-python3 main.py
+### Create a new Bot Box project
+```sh
+botbox create
 ```
 
-On startup, the bot connects to Discord and syncs all slash commands. It also dynamically loads all cogs listed in `config.json`.
+This command will prompt the user to provide information about the project then create the project with initial files.
+
+### Initialize a Bot Box project in the current directory
+```sh
+botbox init
+```
+
+This command will initialize a Bot Box project in the current directory.
+
+### Add a new cog to the current Bot Box project
+```sh
+botbox add <name>
+```
+
+You'll be prompted to define:
+
+- Cog name
+- Command names and descriptions
+- Argument names, types, and descriptions
+- Return types
+
+The cog will be saved in `cogs/` and automatically added to `config.json`. It also triggers a rewrite of `main.py` using `updateMain.py`.
+
+### Display current Bot Box project configuration
+```sh
+botbox config
+```
+
+This command will display the configuration of the current Bot Box project.
 
 ---
 
@@ -79,7 +83,7 @@ On startup, the bot connects to Discord and syncs all slash commands. It also dy
 
 ### `.env`
 
-Stores environment-specific values. Created during setup or manually:
+Stores environment-specific values. Created during creation, initialization or manually:
 
 ```
 DISCORD_TOKEN=your_token_here
@@ -87,7 +91,7 @@ DISCORD_GUILD=your_guild_id
 OTHER_ENV=custom_value
 ```
 
-### `config.json`
+### `botbox.conf`
 
 Defines the bot name, command prefix, and active cogs:
 
@@ -102,6 +106,7 @@ Defines the bot name, command prefix, and active cogs:
   "cogs": [
     {
       "name": "HelloWorld",
+      "file": helloWorld,
       "commands": ["hello"]
     }
   ]
@@ -110,51 +115,30 @@ Defines the bot name, command prefix, and active cogs:
 
 ---
 
-## Creating a Cog
-
-To create a new command set (cog):
-
-```bash
-python3 createCog.py
-```
-
-You'll be prompted to define:
-
-- Cog name
-- Command names and descriptions
-- Argument names, types, and descriptions
-- Return types
-
-The cog will be saved in `cogs/` and automatically added to `config.json`. It also triggers a rewrite of `main.py` using `updateMain.py`.
-
----
-
-## Dependencies
-
-See [`requirements.txt`](requirements.txt):
-
-This file was generated using pipreqs to help make installing modules simple. If you add new modules and dependencies, use pipreqs to update this file in case of distribution and collaboration.
-
-- `discord.py==2.3.2`
-- `python-dotenv==1.0.1`
-
----
-
-## Development Scripts
-
-- `initialize.py` – Initializes your bot setup with `.env` and `config.json`
-- `createCog.py` – Interactive script for creating new cog modules
-- `updateMain.py` – Regenerates `main.py` based on `config.json`
-
----
-
 ## Troubleshooting
 
-- **Missing `config.json`?** Run `initialize.py` to generate it.
-- **Cogs not loading?** Check `config.json` for correct names and verify files exist in `cogs/`.
+- **Missing `botbox.conf`?** Run `botbox initialize` to generate it.
+- **Cogs not loading?** Check `botbox.conf` for correct names and verify files exist in `cogs/`.
 - **Token errors?** Make sure your `.env` file is present and properly formatted.
 
 ---
+
+## TODO
+- [x] Refactor?
+  - [x] Considering refactoring this into a golang cli tool or some other low level compiled language.
+  - [ ] Maybe a npm cli tool for this?
+    - [ ] If so then should use discord.js library instead of discord.py
+- [ ] Expand botbox.conf to include the following
+  - [ ] More details about each command provided to the `botbox add` command
+  - [ ] Expected bot response
+
+
+---
+
+## Version History
+
+- 1.0.0 - Initial version which includes basic features such as generate basic boilerplate code for cogs and the main file
+- 2.0.0 - A major refactor of the project in golang. Scrapped python for this...
 
 ## License
 
