@@ -61,7 +61,148 @@ release:
 
     Released by [GoReleaser](https://github.com/goreleaser/goreleaser).
 
-# Note: I also merged your two 'builds' sections into one,
-# as the second one seemed intended to apply settings like goos/goarch
-# to the first build definition. If you intended two separate builds
-# with different settings, you'll need to adjust accordingly.
+# Homebrew Tap
+brews:
+  - # Name of the formula
+    name: botbox
+
+    # Repository to push the formula to
+    tap:
+      owner: choice404
+      name: homebrew-botbox # The name of your tap repository
+      # Optional: Branch to push to (defaults to main/master)
+      # branch: main
+      # Optional: Token for pushing to the tap repository
+      # Can be GITHUB_TOKEN or a specific token like HOMEBREW_TAP_GITHUB_TOKEN
+      # token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+
+    # Git author used to commit to the repository.
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+
+    # The project homepage.
+    # Defaults to the release URL.
+    homepage: "https://github.com/choice404/botbox"
+
+    # A brief description of the project.
+    description: "A discord bot template generator to help create discord bots quickly and easily. Forget about the boilerplate and focus on what really matters, what your bot will do. Bot Box is built using GO, cobra-cli, and huh, offering an intuitive cli tool to quickly build Discord bot projects. It includes a cog-based architecture, `.env` management, and built-in utilities for automating bot configuration and extension development."
+
+    # List of dependencies
+    # dependencies:
+    #   - name: git
+    #   - name: zsh
+    #     type: optional
+
+    # Installs the binary
+    install: |
+      bin.install "botbox"
+
+    # Optional: Add test block
+    # test: |
+    #   system "#{bin}/botbox --version"
+
+# NFPM configuration for .deb and .rpm packages
+nfpms:
+  - # ID of the nfpm config, must be unique.
+    id: botbox-packages
+
+    # Name of the package.
+    # Defaults to `ProjectName`.
+    package_name: botbox
+
+    # You can override the file name pattern
+    # Default is `{{ .PackageName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}`
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+    # Build IDs to gather artifacts from.
+    builds:
+      - botbox # Matches the ID/binary name from your builds section
+
+    # Formats to be generated.
+    formats:
+      - deb
+      - rpm
+
+    # Version metadata.
+    # Optional, but recommended.
+    # vendor: YourName/Company
+    homepage: "https://github.com/choice404/botbox"
+    maintainer: "choice404 austinch20@protonmail.com" # Change email
+    description: "A discord bot template generator to help create discord bots quickly and easily. Forget about the boilerplate and focus on what really matters, what your bot will do. Bot Box is built using GO, cobra-cli, and huh, offering an intuitive cli tool to quickly build Discord bot projects. It includes a cog-based architecture, `.env` management, and built-in utilities for automating bot configuration and extension development."
+    license: Apache-2.0 # Change to your project's license
+
+    # Contents to add to the package.
+    # Installs the binary to /usr/bin
+    contents:
+      - src: /usr/local/bin/botbox# Path where goreleaser puts the binary temporarily
+        dst: /usr/bin/botbox# Destination path in the package
+
+    # Optional: scripts to run during installation/uninstallation
+    # scripts:
+    #   postinstall: "scripts/postinstall.sh"
+
+# Chocolatey package
+chocolateys:
+  - # Build IDs to gather artifacts from.
+    builds:
+      - botbox # Matches the ID/binary name from your builds section
+
+    # Name of the package.
+    # Defaults to `ProjectName`.
+    name: botbox
+
+    # The project homepage.
+    # Defaults to the release URL.
+    homepage: "https://github.com/choice404/botbox"
+
+    # IDs of the archives to use.
+    # Defaults to all archives.
+    # archive_ids:
+    # - myarchive
+
+    # Set the name of the GoReleaser-generated package.
+    # Defaults to `{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}`
+    # package_name: "{{ .ProjectName }}_{{ .Version }}"
+
+    # Git author used to commit to the repository.
+    # commit_author:
+    #   name: goreleaserbot
+    #   email: bot@goreleaser.com
+
+    # The project title.
+    title: "BotBox CLI"
+
+    # The project authors.
+    authors: "choice404"
+
+    # The project description.
+    description: "A discord bot template generator to help create discord bots quickly and easily. Forget about the boilerplate and focus on what really matters, what your bot will do. Bot Box is built using GO, cobra-cli, and huh, offering an intuitive cli tool to quickly build Discord bot projects. It includes a cog-based architecture, `.env` management, and built-in utilities for automating bot configuration and extension development."
+
+    # The project summary. Defaults to description.
+    # summary: "A very cool app"
+
+    # The project's license URL.
+    # license_url: "https://github.com/choice404/botbox/blob/main/LICENSE"
+
+    # The project source code URL.
+    # source_url: "https://github.com/choice404/botbox/"
+
+    # The project's release notes URL.
+    # release_notes_url: "https://github.com/choice404/botbox/releases/tag/{{ .Tag }}"
+
+    # The project's issue tracker URL.
+    # issues_url: "https://github.com/choice404/botbox/issues"
+
+    # The project's copyright notice.
+    # copyright: 2023 choice404
+
+    # The project's tags.
+    # tags: "cli tool automation"
+
+    # The URL for the package icon.
+    # icon_url: "https://raw.githubusercontent.com/choice404/botbox/main/assets/icon.png"
+
+    # Skip publishing the package to the Chocolatey Community Repository.
+    # Useful for testing or private feeds.
+    # skip_publish: true

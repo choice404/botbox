@@ -1,6 +1,8 @@
 /*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
+Copyright © 2025 Austin Choi austinch20@protonmail.com
+See end of file for extended copyright information
 */
+
 package cmd
 
 import (
@@ -213,3 +215,15 @@ func init() {
 	// is called directly, e.g.:
 	addCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
+
+/*
+Copyright © 2025 Austin "Choice404" Choi
+
+https://github.com/choice404/botbox
+
+Bot Box
+A discord bot template generator to help create discord bots quickly and easily
+
+This code is licensed under the MIT License.
+Please see the LICENSE file in the root directory of this project for the full license details.
+*/

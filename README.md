@@ -22,7 +22,7 @@ Make the discord bot of your dreams.
 
 A discord bot template generator to help create discord bots quickly and easily. Forget about the boilerplate and focus on what really matters, what your bot will do.
 
-**Bot Box** is built using GO, cobra-cli, and huh, offering a intuitive cli tool to quickly build Discord bot projects. It includes a cog-based architecture, `.env` management, and built-in utilities for automating bot configuration and extension development.
+**Bot Box** is built using GO, cobra-cli, and huh, offering an intuitive cli tool to quickly build Discord bot projects. It includes a cog-based architecture, `.env` management, and built-in utilities for automating bot configuration and extension development.
 
 ---
 
