@@ -1,4 +1,4 @@
-module github.com/choice404/botbox
+module github.com/choice404/botbox/v2
 
 go 1.24.1
 
