@@ -61,7 +61,7 @@ curl.exe https://webi.ms/golang | powershell
 
 After this do the following command
 ```
-go install choice404/tap/botbox@latest
+go install github.com/choice404/botbox/v2@latest
 ```
 
 
