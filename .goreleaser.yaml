@@ -52,7 +52,7 @@ brews:
     goamd64: v1
     repository:
       owner: choice404
-      name: botbox
+      name: homebrew-tap
     commit_author:
       name: Austin Choi
       email: austinch20@protonmail.com
