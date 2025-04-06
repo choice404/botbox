@@ -5,21 +5,21 @@
 class Botbox < Formula
   desc "Your botbox description here"
   homepage "https://github.com/choice404/botbox"
-  version "2.0.1"
+  version "2.0.2"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/choice404/botbox/releases/download/v2.0.1/botbox_Darwin_x86_64.tar.gz"
-      sha256 "ae68f78babfbfabb79ba13c065399a1a3725be5cae1bfbe160a6b7c59d1c26f2"
+      url "https://github.com/choice404/botbox/releases/download/v2.0.2/botbox_Darwin_x86_64.tar.gz"
+      sha256 "70b7a09ee4ec4ceb41e20e94fca23a25ed1e6db186f1769e278af778eb5e6ff6"
 
       def install
         bin.install "botbox"
       end
     end
     if Hardware::CPU.arm?
-      url "https://github.com/choice404/botbox/releases/download/v2.0.1/botbox_Darwin_arm64.tar.gz"
-      sha256 "1aada190f724e52a9c47fe1aff7a122b5e2fe6aa77b7e726e55b6ea855d34549"
+      url "https://github.com/choice404/botbox/releases/download/v2.0.2/botbox_Darwin_arm64.tar.gz"
+      sha256 "a30bc78f40ff3b2e9addc5eb6445aae9acac12a49dfa07de5be5296f677eec31"
 
       def install
         bin.install "botbox"
@@ -30,8 +30,8 @@ class Botbox < Formula
   on_linux do
     if Hardware::CPU.intel?
       if Hardware::CPU.is_64_bit?
-        url "https://github.com/choice404/botbox/releases/download/v2.0.1/botbox_Linux_x86_64.tar.gz"
-        sha256 "9f479474a40726d0493c144e92c3e1058df6b851e2745660a8a48c4c4e769aa8"
+        url "https://github.com/choice404/botbox/releases/download/v2.0.2/botbox_Linux_x86_64.tar.gz"
+        sha256 "3986eba5b6d6c5541fc2034ca5031eae882d62f3ad7b1fa961ffec4475f1cee2"
 
         def install
           bin.install "botbox"
@@ -40,8 +40,8 @@ class Botbox < Formula
     end
     if Hardware::CPU.arm?
       if Hardware::CPU.is_64_bit?
-        url "https://github.com/choice404/botbox/releases/download/v2.0.1/botbox_Linux_arm64.tar.gz"
-        sha256 "498497058da5abae38922810111feb222917da5709169c76032c2d1f731ad881"
+        url "https://github.com/choice404/botbox/releases/download/v2.0.2/botbox_Linux_arm64.tar.gz"
+        sha256 "b1dc94a258e9123a97507afdd6819593fba90244df515281fb8c21d48344a1e7"
 
         def install
           bin.install "botbox"
