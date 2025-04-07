@@ -59,6 +59,7 @@ var createCmd = &cobra.Command{
 
 func createProjectWrapper() {
 	rootDir := botName
+
 	if _, err := os.Stat(rootDir); err == nil && !os.IsNotExist(err) {
 		fmt.Printf("Directory %s already exists. Please choose a different name.\n", rootDir)
 		return

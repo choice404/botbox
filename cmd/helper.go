@@ -36,9 +36,9 @@ func Banner() {
 	fmt.Println(`
     ____        __     ____            
    / __ )____  / /_   / __ )____  _  __
-  / __  / __ \\/ __/  / __  / __ \\| |/_/
+  / __  / __ \/ __/  / __  / __ \| |/_/
  / /_/ / /_/ / /_   / /_/ / /_/ />  <  
-/_____/\\____/\\__/  /_____/\\____/_/|_|  
+/_____/\____/\__/  /_____/\____/_/|_|  
   `)
 }
 
@@ -86,22 +86,46 @@ func BotBoxCreate(actionCallback func()) {
 			huh.NewInput().
 				Title("Enter the name of your bot").
 				Prompt("> ").
-				Value(&botName),
+				Value(&botName).
+				Validate(func(s string) error {
+					if botName == "" {
+						return fmt.Errorf("bot name cannot be empty")
+					}
+					if len(s) > 20 {
+						return fmt.Errorf("bot name is too long")
+					}
+					r := []rune(s)[0]
+					if !unicode.IsLetter(r) {
+						return fmt.Errorf("bot name must start with a letter")
+					}
+					return nil
+				}),
 
 			huh.NewText().
 				Title("Enter a description of your bot").
-				Value(&botDescription),
+				Value(&botDescription).
+				CharLimit(100),
 
 			huh.NewInput().
 				Title("Enter the author of your bot").
 				Prompt("> ").
-				Value(&botAuthor),
+				Value(&botAuthor).
+				Validate(func(s string) error {
+					if botAuthor == "" {
+						return fmt.Errorf("author name cannot be empty")
+					}
+					return nil
+				}),
 
 			huh.NewInput().
 				Title("Enter the command prefix for your bot (default: '!')").
 				Prompt("> ").
 				Value(&botPrefix).
 				Validate(func(s string) error {
+					if s == "" {
+						botPrefix = "!"
+						return nil
+					}
 					if len(s) > 1 {
 						return fmt.Errorf("command prefix must be a single character")
 					}
@@ -109,9 +133,6 @@ func BotBoxCreate(actionCallback func()) {
 
 					if unicode.IsLetter(r) || unicode.IsDigit(r) {
 						return fmt.Errorf("command prefix can not be an alphanumeric character")
-					}
-					if s == "" {
-						botPrefix = "!"
 					}
 					return nil
 				}),
@@ -125,7 +146,6 @@ func BotBoxCreate(actionCallback func()) {
 				).
 				Value(&envChoice),
 			huh.NewInput().
-				// Title("Enter the bot token").
 				TitleFunc(func() string {
 					if envChoice == "env" {
 						return "Enter the bot token"
@@ -135,6 +155,9 @@ func BotBoxCreate(actionCallback func()) {
 				Prompt("> ").
 				Validate(func(s string) error {
 					if envChoice == "env" {
+						if s == "" {
+							return fmt.Errorf("token cannot be empty")
+						}
 						if len(s) < 10 {
 							return fmt.Errorf("token is too short")
 						}
