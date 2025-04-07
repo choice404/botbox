@@ -37,10 +37,36 @@ var addCmd = &cobra.Command{
 	Short: "Adds new files to the project",
 	Long:  `Adds a new file to the project. By default it will add a cog however the user can specify to add a custom command file.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		fileNameForm := huh.NewForm(
+			huh.NewGroup(
+				huh.NewInput().
+					Key("filename").
+					Title("Enter the filename").
+					Prompt("> ").
+					Validate(func(s string) error {
+						if s == "" {
+							return fmt.Errorf("filename cannot be empty")
+						}
+						if strings.Contains(s, " ") {
+							return fmt.Errorf("filename cannot contain spaces")
+						}
+						return nil
+					}),
+			),
+		)
+
 		Banner()
-		var filename string
+		filename := ""
 		if len(args) > 0 {
 			filename = args[0]
+		}
+		if filename == "" {
+			err := fileNameForm.Run()
+			if err != nil {
+				fmt.Println("Error:", err)
+				return
+			}
+			filename = fileNameForm.GetString("filename")
 		}
 		addCogs(filename)
 	},
@@ -98,7 +124,16 @@ func addCogs(filename string) {
 			argDescription = argInfoForm.GetString("description")
 			args = append(args, ArgInfo{Name: argsInput, Type: argType, Description: argDescription})
 		}
-		commandList = append(commandList, CommandInfo{Name: command, Description: description, Args: args, ReturnType: returnType})
+		confirmCmdForm := confirmCommandGenerator()
+		err = confirmCmdForm.Run()
+		if err != nil {
+			fmt.Println("Error:", err)
+			return
+		}
+		if !confirmCmdForm.GetBool("confirm") {
+			commandList = append(commandList, CommandInfo{Name: command, Description: description, Args: args, ReturnType: returnType})
+		}
+
 	}
 
 	filePath := filepath.Join(rootDir, "src", "cogs", filename+".py")
@@ -359,9 +394,12 @@ func generateArgForms() (*huh.Form, *huh.Form) {
 	return argStartForm, argInfoForm
 }
 
-func confirmCommand() *huh.Form {
+func confirmCommandGenerator() *huh.Form {
 	cmdForm := huh.NewForm(
 		huh.NewGroup(
+			huh.NewNote().
+				Title("Command Info").
+				Description(fmt.Sprintf("Command Name: %s\nDescription: %s\nReturn Type: %s\nArguments: %v", command, description, returnType, args)),
 			huh.NewConfirm().
 				Title("Does everything look correct?").
 				Affirmative("yes").
