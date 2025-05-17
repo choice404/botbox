@@ -153,6 +153,7 @@ func BotBoxCreate(actionCallback func()) {
 					return "Enter the Doppler project name"
 				}, &envChoice).
 				Prompt("> ").
+				EchoMode(huh.EchoModePassword).
 				Validate(func(s string) error {
 					if envChoice == "env" {
 						if s == "" {
@@ -330,16 +331,31 @@ func CreateProject(rootDir string) {
 4. Use the command arguments to run commands
 
 ## License
-This project is licensed under the %s License - see the [LICENSE](LICENSE) file for details.
-
-## Contributors
-
-- %s
-`, botName, botDescription, botAuthor, licenseType, botAuthor)
+`, botName, botDescription, botAuthor)
 		if err != nil {
 			fmt.Printf("Error writing to README.md file: %v\n", err)
 			return
 		}
+
+		if licenseType != "no-license" && licenseType != "" {
+			_, err = fmt.Fprintf(readmeFile, `This project is licensed under the %s License - see the [LICENSE](LICENSE) file for details.
+    `, licenseType)
+			if err != nil {
+				fmt.Printf("Error writing to README.md file: %v\n", err)
+				return
+			}
+		} else {
+			_, err = fmt.Fprint(readmeFile, `All rights reserved.`)
+		}
+
+		_, err = fmt.Fprintf(readmeFile, ` ## Contributors
+
+- %s`, botAuthor)
+		if err != nil {
+			fmt.Printf("Error writing to README.md file: %v\n", err)
+			return
+		}
+
 	} else if err == nil && !readmeOpt {
 		fmt.Println("Not overriding README.md file.")
 	} else {
@@ -470,7 +486,7 @@ python3 src/main.py
 		defer mainFile.Close()
 		_, err = fmt.Fprint(mainFile, `"""
 Copyright © 2025 Austin "Choice404" Choi
-See end of file for extended copyright information
+See end of file for extended copyright information for BotBox
 """
 
 import discord
@@ -494,7 +510,7 @@ class Bot(commands.Bot):
         if not self.synced:
             await self.tree.sync()
             self.synced = True
-        print(f"Synced slash commands for {{self.user}}")
+        print(f"Synced slash commands for {self.user}")
 
     async def on_command_error(self, ctx, error):
         await ctx.reply(error, ephemeral = True)
@@ -506,13 +522,13 @@ GUILD = os.getenv('DISCORD_GUILD')
 
 @bot.event
 async def on_ready():
-    print(f'{{bot.user}} has connected to Discord!')
-    print(f'Connected to guild: {{GUILD}}')
+    print(f'{bot.user} has connected to Discord!')
+    print(f'Connected to guild: {GUILD}')
     await bot.add_cog(helloWorld.HelloWorld(bot))
     await bot.syncing()
 
 def main():
-    print(f"{{bot.name}} is starting up...")
+    print(f"{bot.name} is starting up...")
     bot.run(TOKEN)
 
 if __name__ == '__main__':
@@ -524,9 +540,9 @@ Copyright © 2025 Austin "Choice404" Choi
 https://github.com/choice404/botbox
 
 Bot Box
-The tempalte entry point for the bot.
+The template entry point for the bot.
 
-This code is licensed under the MIT License.
+This code and BotBox is licensed under the MIT License.
 https://github.com/choice404/botbox/license
 """
 `)
