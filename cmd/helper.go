@@ -281,8 +281,21 @@ func CreateProject(rootDir string) {
     {
       "name": "HelloWorld",
       "file": "helloWorld",
-      "commands": [
+      "slash_commands": [
           "hello"
+      ],
+      "prefix_commands": []
+    },
+    {
+      "name": "Cogs",
+      "file": "cogs",
+      "slash_commands": [],
+      "prefix_commands": [
+        "reload_cog",
+        "reload_all_cogs",
+        "add_cog",
+        "remove_cog",
+        "list_cogs"
       ]
     }
   ]
@@ -450,6 +463,7 @@ DISCORD_GUILD=%s
 # and run it with ./run.sh
 # If you are using Doppler, make sure to run doppler run -- ./run.sh
 # If you are using a .env file, make sure to run source .env before running this script
+# If you are using botbox to run your bot, you can run it with the command: botbox run
 
 python3 src/main.py
 `)
@@ -498,8 +512,9 @@ import json
 
 class Bot(commands.Bot):
     def __init__(self):
-        with open('config.json') as f:
+        with open('botbox.conf') as f:
             config = json.load(f)
+
         self.name =  config['bot']['name']
         intents = discord.Intents.all()
         intents.message_content = True
@@ -522,10 +537,23 @@ GUILD = os.getenv('DISCORD_GUILD')
 
 @bot.event
 async def on_ready():
+    print(f"{bot.name} is starting up...")
     print(f'{bot.user} has connected to Discord!')
     print(f'Connected to guild: {GUILD}')
-    await bot.add_cog(helloWorld.HelloWorld(bot))
+
+    with open('botbox.conf', 'r') as f:
+        config = json.load(f)
+
+    for cog_config in config['cogs']:
+        cog_file = cog_config['file']
+        
+        try:
+            await bot.load_extension(f'cogs.{cog_file}')
+        except Exception as e:
+            print(f"❌ Failed to load cog {cog_file}: {e}")
+    
     await bot.syncing()
+    print("Bot is ready!")
 
 def main():
     print(f"{bot.name} is starting up...")
@@ -613,6 +641,114 @@ class HelloWorld(commands.Cog):
 		}
 	}
 
+	if cogsOpt, err := CreateFileOption(rootDir + "src/cogs/cogs.py"); err == nil && cogsOpt {
+		cogsFile, err := os.Create(rootDir + "src/cogs/cogs.py")
+		if err != nil {
+			fmt.Printf("Error creating helloWorld.py file: %v\n", err)
+			return
+		}
+		defer cogsFile.Close()
+		_, err = fmt.Fprintf(cogsFile, `"""
+BotBox Copyright © 2025 Austin "Choice404" Choi
+See end of file for extended copyright information for BotBox
+"""
+
+"""
+Bot Author %s
+
+%s
+%s
+"""
+
+from discord.ext import commands
+import json
+
+class CogManagement(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    @commands.is_owner()
+    async def reload_cog(self, ctx, extension_name):
+        with open('botbox.conf', 'r') as f:
+            config = json.load(f)
+
+        if not any(cog['file'] == extension_name for cog in config['cogs']):
+            await ctx.send(f'{extension_name} is not a valid cog name.', ephemeral=True)
+            return
+
+        try:
+            await self.bot.reload_extension(f'cogs.{extension_name}')
+            await ctx.send(f'✅ Reloaded {extension_name}', ephemeral=True)
+        except Exception as e:
+            await ctx.send(f'❌ Failed to reload {extension_name}: {e}', ephemeral=True)
+
+        self.bot.sync()
+
+    @commands.command()
+    @commands.is_owner()
+    async def reload_all_cogs(self, ctx):
+        with open('botbox.conf', 'r') as f:
+            config = json.load(f)
+        
+        failed_cogs = []
+        success_count = 0
+        
+        for cog_config in config['cogs']:
+            cog_file = cog_config['file']
+            try:
+                await self.bot.reload_extension(f'cogs.{cog_file}')
+                success_count += 1
+            except Exception as e:
+                failed_cogs.append(f"{cog_file}: {e}")
+        
+        if failed_cogs:
+            await ctx.send(f'✅ Reloaded {success_count} cogs\n❌ Failed:\n- {"\n- ".join(failed_cogs)}', ephemeral=True)
+        else:
+            await ctx.send(f'✅ Successfully reloaded all {success_count} cogs!', ephemeral=True)
+
+        self.bot.sync()
+
+    @commands.command()
+    @commands.is_owner()
+    async def list_cogs(self, ctx):
+        with open('botbox.conf', 'r') as f:
+            config = json.load(f)
+
+        cog_list = [cog['file'] for cog in config['cogs']]
+        if cog_list:
+            await ctx.send(f'Available cogs:\n- {"\n- ".join(cog_list)}', ephemeral=True)
+        else:
+            await ctx.send('No cogs available.', ephemeral=True)
+
+
+async def setup(bot):
+    await bot.add_cog(CogManagement(bot))
+
+"""
+Copyright © 2025 Austin "Choice404" Choi
+
+https://github.com/choice404/botbox
+
+Bot Box
+Cog management commands for reloading and listing cogs.
+
+This code and BotBox is licensed under the MIT License.
+https://github.com/choice404/botbox/license
+"""
+  `, botAuthor, botName, botDescription)
+
+		if err != nil {
+			fmt.Printf("Error writing to cogs.py file: %v\n", err)
+			return
+		}
+		err = os.Chmod(rootDir+"src/cogs/cogs.py", 0755)
+		if err != nil {
+			fmt.Printf("Error setting permissions for cogs.py file: %v\n", err)
+			return
+		}
+	}
+
 	if initOpt, err := CreateFileOption(rootDir + "src/cogs/__init__.py"); err == nil && initOpt {
 		_, err := os.Create(rootDir + "src/cogs/__init__.py")
 		if err != nil {
@@ -680,5 +816,26 @@ Bot Box
 A discord bot template generator to help create discord bots quickly and easily
 
 This code is licensed under the MIT License.
-Please see the LICENSE file in the root directory of this project for the full license details.
+
+MIT License
+
+Copyright (c) 2025 Austin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 */
