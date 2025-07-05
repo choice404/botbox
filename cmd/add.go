@@ -21,21 +21,25 @@ var (
 	cogClass    string
 	cogFunction string
 
-	commandList    []CommandInfo
-	command        string
-	commandConfirm bool
-	description    string
-	returnType     string
-	args           []ArgInfo
-	argsInput      string
-	argType        string
-	argDescription string
+	slashCommandList  []CommandInfo
+	prefixCommandList []CommandInfo
+	command           string
+	commandConfirm    bool
+	description       string
+	returnType        string
+	cmdType           string
+	args              []ArgInfo
+	argsInput         string
+	argType           string
+	argDescription    string
 )
 
 var addCmd = &cobra.Command{
 	Use:   "add",
-	Short: "Adds new files to the project",
-	Long:  `Adds a new file to the project. By default it will add a cog however the user can specify to add a custom command file.`,
+	Short: "Adds new cog to the project",
+	Long: `This command allows you to add a new cog to your bot project.
+You can specify the cog structure as well as create commands for the cog.
+`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fileNameForm := huh.NewForm(
 			huh.NewGroup(
@@ -44,11 +48,9 @@ var addCmd = &cobra.Command{
 					Title("Enter the filename").
 					Prompt("> ").
 					Validate(func(s string) error {
-						if s == "" {
-							return fmt.Errorf("filename cannot be empty")
-						}
-						if strings.Contains(s, " ") {
-							return fmt.Errorf("filename cannot contain spaces")
+						err := validateFileName(s)
+						if err != nil {
+							return err
 						}
 						return nil
 					}),
@@ -59,6 +61,11 @@ var addCmd = &cobra.Command{
 		filename := ""
 		if len(args) > 0 {
 			filename = args[0]
+			err := validateFileName(filename)
+			if err != nil {
+				fmt.Println("Error:", err)
+				return
+			}
 		}
 		if filename == "" {
 			err := fileNameForm.Run()
@@ -78,6 +85,7 @@ func addCogs(filename string) {
 		fmt.Println("Error finding bot config:", err)
 		return
 	}
+
 	config, err := LoadConfig()
 	if err != nil {
 		fmt.Println("Error loading config:", err)
@@ -85,7 +93,7 @@ func addCogs(filename string) {
 	}
 
 	for {
-		cmdConfirmForm, cmdInfoForm := generateCmdForms()
+		cmdConfirmForm, cmdInfoForm, cmdAcceptForm := generateCmdForms()
 		err := cmdConfirmForm.Run()
 		if err != nil {
 			fmt.Println("Error:", err)
@@ -101,9 +109,11 @@ func addCogs(filename string) {
 			fmt.Println("Error:", err)
 			return
 		}
+
 		command = cmdInfoForm.GetString("name")
 		description = cmdInfoForm.GetString("description")
 		returnType = cmdInfoForm.GetString("returnType")
+		cmdType = cmdInfoForm.GetString("cmdType")
 		for {
 			argConfirmForm, argInfoForm := generateArgForms()
 			err := argConfirmForm.Run()
@@ -127,21 +137,23 @@ func addCogs(filename string) {
 			argType = ""
 			argDescription = ""
 		}
-		confirmCmdForm := confirmCommandGenerator()
-		err = confirmCmdForm.Run()
+		err = cmdAcceptForm.Run()
 		if err != nil {
 			fmt.Println("Error:", err)
 			return
 		}
-		if !confirmCmdForm.GetBool("confirm") {
-			commandList = append(commandList, CommandInfo{Name: command, Description: description, Args: args, ReturnType: returnType})
-			command = ""
-			description = ""
-			returnType = ""
-			args = []ArgInfo{}
-			continue
+		if cmdAcceptForm.GetBool("confirm") {
+			if cmdType == "slash" {
+				slashCommandList = append(slashCommandList, CommandInfo{Name: command, Description: description, Args: args, ReturnType: returnType})
+			} else if cmdType == "prefix" {
+				prefixCommandList = append(prefixCommandList, CommandInfo{Name: command, Description: description, Args: args, ReturnType: returnType})
+			}
 		}
-
+		command = ""
+		description = ""
+		returnType = ""
+		cmdType = ""
+		args = []ArgInfo{}
 	}
 
 	filePath := filepath.Join(rootDir, "src", "cogs", filename+".py")
@@ -168,16 +180,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-class %s(commands.Cog):
+class %s(commands.Cog, name="%s"):
     def __init__(self, bot) -> None:
         self.bot = bot
         print("%s cog loaded")
-`, config.BotInfo.Author, config.BotInfo.Name, config.BotInfo.Description, className, filename)
+`, config.BotInfo.Author, config.BotInfo.Name, config.BotInfo.Description, className, className, filename)
 	if err != nil {
 		return
 	}
 
-	for _, command := range commandList {
+	for _, command := range slashCommandList {
 		var argBuilder strings.Builder
 		for i, arg := range command.Args {
 			fmt.Fprintf(&argBuilder, "%s: %s", arg.Name, arg.Type)
@@ -245,6 +257,80 @@ class %s(commands.Cog):
 		}
 	}
 
+	for _, command := range prefixCommandList {
+		var argBuilder strings.Builder
+		for i, arg := range command.Args {
+			fmt.Fprintf(&argBuilder, "%s: %s", arg.Name, arg.Type)
+			if i < len(command.Args)-1 {
+				argBuilder.WriteString(", ")
+			}
+		}
+		fullArgStr := argBuilder.String()
+
+		_, err = fmt.Fprintf(file, `
+    @commands.command()
+    async def %s(self, interaction: discord.Interaction, %s) -> %s:
+        """
+        %s when the user types "/%s"
+
+            Parameters:
+`, command.Name, fullArgStr, command.ReturnType, command.Description, command.Name)
+		if err != nil {
+			return
+		}
+
+		for _, arg := range command.Args {
+			_, err = fmt.Fprintf(file, `                    %s (%s): %s
+`, arg.Name, arg.Type, arg.Description)
+			if err != nil {
+				return
+			}
+		}
+
+		_, err = fmt.Fprintf(file, `
+            Returns:
+                    %s
+        """
+
+        try:
+            await interaction.response.send_message(f"%s", ephemeral=True)
+        except Exception as e:
+            print(f"Error: {e}")
+            await interaction.response.send_message(f"Error: {e}", ephemeral=True)
+`, command.ReturnType, command.Name)
+		if err != nil {
+			return
+		}
+
+		var retValue any
+		switch command.ReturnType {
+		case "str":
+			retValue = `""`
+		case "int":
+			retValue = 0
+		case "float":
+			retValue = 0.0
+		case "bool":
+			retValue = "False"
+		default:
+			retValue = "None"
+		}
+
+		_, err = fmt.Fprintf(file, `
+        return %v
+`, retValue)
+		if err != nil {
+			fmt.Println("Error writing return statement:", err)
+			return
+		}
+	}
+
+	_, err = fmt.Fprintf(file, `
+
+async def setup(bot):
+    await bot.add_cog(%s(bot))
+  `, className)
+
 	err = file.Sync()
 	if err != nil {
 		fmt.Println("Error syncing file:", err)
@@ -252,24 +338,37 @@ class %s(commands.Cog):
 	}
 
 	cog := CogConfig{
-		Name:     strings.ToUpper(string(filename[0])) + filename[1:],
-		File:     strings.ToLower(string(filename[0])) + filename[1:],
-		Commands: []string{},
+		Name:           strings.ToUpper(string(filename[0])) + filename[1:],
+		File:           strings.ToLower(string(filename[0])) + filename[1:],
+		SlashCommands:  []string{},
+		PrefixCommands: []string{},
 	}
 
-	for _, command := range commandList {
-		cog.Commands = append(cog.Commands, command.Name)
+	for _, slashCommand := range slashCommandList {
+		cog.SlashCommands = append(cog.SlashCommands, slashCommand.Name)
+	}
+
+	for _, prefixCommand := range prefixCommandList {
+		cog.PrefixCommands = append(cog.PrefixCommands, prefixCommand.Name)
 	}
 
 	config.Cogs = append(config.Cogs, cog)
 
-	jsonData, err := json.MarshalIndent(config, "", "    ")
+	jsonData, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		fmt.Println("failed to marshal config to JSON: %w", err)
 		return
 	}
 
-	err = os.WriteFile("botbox.conf", jsonData, 0644)
+	confDir, err := FindBotConf()
+	if err != nil {
+		fmt.Println("Error: %w", err)
+		return
+	}
+
+	confPath := filepath.Join(confDir, "botbox.conf")
+
+	err = os.WriteFile(confPath, jsonData, 0644)
 	if err != nil {
 		fmt.Println("failed to write updated botbox.conf: %w", err)
 		return
@@ -277,7 +376,7 @@ class %s(commands.Cog):
 
 }
 
-func generateCmdForms() (*huh.Form, *huh.Form) {
+func generateCmdForms() (*huh.Form, *huh.Form, *huh.Form) {
 	cmdStartForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
@@ -287,6 +386,7 @@ func generateCmdForms() (*huh.Form, *huh.Form) {
 				Negative("no"),
 		),
 	)
+
 	cmdInfoForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
@@ -299,6 +399,26 @@ func generateCmdForms() (*huh.Form, *huh.Form) {
 					}
 					if strings.Contains(s, " ") {
 						return fmt.Errorf("command name cannot contain spaces")
+					}
+					if commandExists(s, append(slashCommandList, prefixCommandList...)) {
+						return fmt.Errorf("command name already exists")
+					}
+					return nil
+				}),
+
+			huh.NewSelect[string]().
+				Key("cmdType").
+				Title("Select the command type").
+				Options(
+					huh.NewOption("slash", "slash"),
+					huh.NewOption("prefix", "prefix"),
+				).
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("return type cannot be empty")
+					}
+					if s != "slash" && s != "prefix" {
+						return fmt.Errorf("return type must either slash or prefix")
 					}
 					return nil
 				}),
@@ -335,11 +455,23 @@ func generateCmdForms() (*huh.Form, *huh.Form) {
 				}),
 		),
 	)
-	return cmdStartForm, cmdInfoForm
+	cmdAcceptForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Command Info").
+				Description(fmt.Sprintf("Command Name: %s\nCommand Type: %s\nDescription: %s\nReturn Type: %s\nArguments: %v", command, cmdType, description, returnType, args)),
+			huh.NewConfirm().
+				Title("Does everything look correct?").
+				Key("confirm").
+				Affirmative("yes").
+				Negative("no"),
+		),
+	)
+
+	return cmdStartForm, cmdInfoForm, cmdAcceptForm
 }
 
 func generateArgForms() (*huh.Form, *huh.Form) {
-
 	argStartForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
@@ -358,10 +490,13 @@ func generateArgForms() (*huh.Form, *huh.Form) {
 				Prompt("> ").
 				Validate(func(s string) error {
 					if s == "" {
-						return fmt.Errorf("argument name cannot be empty")
+						return fmt.Errorf("Argument name cannot be empty")
 					}
 					if strings.Contains(s, " ") {
-						return fmt.Errorf("argument name cannot contain spaces")
+						return fmt.Errorf("Argument name cannot contain spaces")
+					}
+					if argExists(s, args) {
+						return fmt.Errorf("Argument name already exists")
 					}
 					return nil
 				}),
@@ -402,20 +537,54 @@ func generateArgForms() (*huh.Form, *huh.Form) {
 	return argStartForm, argInfoForm
 }
 
-func confirmCommandGenerator() *huh.Form {
-	cmdForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewNote().
-				Title("Command Info").
-				Description(fmt.Sprintf("Command Name: %s\nDescription: %s\nReturn Type: %s\nArguments: %v", command, description, returnType, args)),
-			huh.NewConfirm().
-				Title("Does everything look correct?").
-				Affirmative("yes").
-				Negative("no"),
-		),
-	)
+func commandExists(commandName string, commandList []CommandInfo) bool {
+	for _, cmd := range commandList {
+		if cmd.Name == commandName {
+			return true
+		}
+	}
+	return false
+}
 
-	return cmdForm
+func argExists(argName string, args []ArgInfo) bool {
+	for _, arg := range args {
+		if arg.Name == argName {
+			return true
+		}
+	}
+	return false
+}
+
+func fileExists(fileName string) bool {
+	rootDir, err := FindBotConf()
+	filePath := filepath.Join(rootDir, "src", "cogs", fileName+".py")
+	_, err = os.Stat(filePath)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	return false
+}
+
+func validateFileName(fileName string) error {
+	if fileExists(fileName) {
+		return fmt.Errorf("file with name '%s' already exists", fileName)
+	}
+	if fileName == "" {
+		return fmt.Errorf("filename cannot be empty")
+	}
+	if strings.Contains(fileName, " ") {
+		return fmt.Errorf("filename cannot contain spaces")
+	}
+	if strings.Contains(fileName, ".") || strings.Contains(fileName, "/") || strings.Contains(fileName, "\\") {
+		return fmt.Errorf("filename cannot contain '.' or '/' or '\\'")
+	}
+	if strings.Contains(fileName, "-") || strings.Contains(fileName, ":") || strings.Contains(fileName, "*") || strings.Contains(fileName, "?") || strings.Contains(fileName, "\"") {
+		return fmt.Errorf("filename cannot contain '-', ':', '*', '?', or '\"'")
+	}
+	return nil
 }
 
 func init() {

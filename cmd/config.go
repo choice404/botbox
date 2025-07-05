@@ -57,8 +57,11 @@ func displayConfig(rootDir string) {
 	fmt.Println("Cogs:")
 	for _, cog := range config.Cogs {
 		fmt.Printf(" - %s(%s)\n", cog.File, cog.Name)
-		for _, command := range cog.Commands {
-			fmt.Printf("   - Command: %s\n", command)
+		for _, slashCommand := range cog.SlashCommands {
+			fmt.Printf("   - Slash Command: %s\n", slashCommand)
+		}
+		for _, prefixCommand := range cog.PrefixCommands {
+			fmt.Printf("   - Prefix Command: %s\n", prefixCommand)
 		}
 	}
 }
@@ -90,8 +93,11 @@ func displayPartialConfig(rootDir string) {
 		fmt.Println("Cogs:")
 		for _, cog := range config.Cogs {
 			fmt.Printf(" - %s(%s)\n", cog.File, cog.Name)
-			for _, command := range cog.Commands {
-				fmt.Printf("   - Command: %s\n", command)
+			for _, slashCommand := range cog.SlashCommands {
+				fmt.Printf("   - Slash Command: %s\n", slashCommand)
+			}
+			for _, prefixCommand := range cog.PrefixCommands {
+				fmt.Printf("   - Prefix Command: %s\n", prefixCommand)
 			}
 		}
 	}

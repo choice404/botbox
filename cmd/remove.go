@@ -6,24 +6,91 @@ See end of file for extended copyright information
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
 
+	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
 
-// removeCmd represents the remove command
+var (
+	cogList       []string
+	cogRemoveName string
+	cogRemove     CogConfig
+)
+
 var removeCmd = &cobra.Command{
 	Use:   "remove",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Remove a cog from the project",
+	Long: ` This command allows you to remove a specific cog from your bot project.
+You can specify the cog to remove by providing its name as an argument or select it from a list of available cogs.
+  `,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("remove called")
+		rootDir, err := FindBotConf()
+		if err != nil {
+			return
+		}
+
+		configPath := filepath.Join(rootDir, "botbox.conf")
+
+		config, err := LoadConfig()
+		if err != nil {
+			fmt.Println("Error loading config:", err)
+			return
+		}
+		for _, cog := range config.Cogs {
+			cogList = append(cogList, cog.Name)
+		}
+
+		cmdRemoveForm := generateCommandRemoveForms()
+
+		err = cmdRemoveForm.Run()
+		if err != nil {
+			fmt.Println("Error running form:", err)
+			return
+		}
+
+		for i, cog := range config.Cogs {
+			if cog.Name == cogName {
+				cogRemove = cog
+				config.Cogs = slices.Delete(config.Cogs, i, i+1)
+			}
+		}
+
+		jsonData, err := json.MarshalIndent(config, "", "  ")
+		if err != nil {
+			fmt.Println("failed to marshal config to JSON: %w", err)
+			return
+		}
+
+		err = os.Remove(rootDir + "/src/cogs/" + cogRemove.File + ".py")
+
+		err = os.WriteFile(configPath, jsonData, 0644)
+		if err != nil {
+			fmt.Println("failed to write updated botbox.conf: %w", err)
+			return
+		}
+
 	},
+}
+
+func generateCommandRemoveForms() *huh.Form {
+	cmdRemoveForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Value(&cogName).
+				Height(8).
+				Title("Select a cog to remove").
+				OptionsFunc(func() []huh.Option[string] {
+					return huh.NewOptions(cogList...)
+				}, &cogName),
+		),
+	)
+
+	return cmdRemoveForm
 }
 
 func init() {

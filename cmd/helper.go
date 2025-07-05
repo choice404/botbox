@@ -593,10 +593,12 @@ https://github.com/choice404/botbox/license
 		}
 		defer helloWorldFile.Close()
 		_, err = fmt.Fprintf(helloWorldFile, `"""
-Bot Author %s
+BotBox Copyright © 2025 Austin "Choice404" Choi
+See end of file for extended copyright information for BotBox
+"""
 
-%s
-%s
+"""
+This is an example file. Delete using the command "botbox remove"
 """
 
 import discord
@@ -628,6 +630,9 @@ class HelloWorld(commands.Cog):
         except Exception as e:
             print(f"Error: {e}")
             await interaction.response.send_message(f"Error: {e}", ephemeral=True)
+
+async def setup(bot):
+    await bot.add_cog(HelloWorld(bot))
   `, botAuthor, botName, botDescription)
 
 		if err != nil {

@@ -156,18 +156,33 @@ Defines the bot name, command prefix, and active cogs:
 - [ ] Expand botbox.conf to include the following
   - [ ] More details about each command provided to the `botbox add` command
   - [ ] Expected bot response
+- [ ] New commands
+  - [x] Remove command
+  - [ ] Edit command
+- [ ] Dynamic bot building
+  - [ ] Create "blocks" that will be dynamically connected together for command functionality
 
 
 ---
 
 ## Version History
 
-- 1.0.0 - Initial version which includes basic features such as generate basic boilerplate code for cogs and the main file
+- 1.0.0 - Initial version which includes basic features such as generate basic boilerplate code for cogs and the main file.
 - 2.0.0 - A major refactor of the project in golang. Scrapped python for this...
-- 2.0.1 - Github releases using goreleaser
-- 2.0.2 - Brew release through taps and updated the imports to use github in the project
-- 2.0.3 - Updated the CLI form so custom prefixes are single non-alphanumeric characters only
-- 2.0.4 - Updated README.md to include instructions on how to install botbox cli and updated imports with v2
+- 2.0.1 - Github releases using goreleaser.
+- 2.0.2 - Brew release through taps and updated the imports to use github in the project.
+- 2.0.3 - Updated the CLI form so custom prefixes are single non-alphanumeric characters only.
+- 2.0.4 - Updated README.md to include instructions on how to install botbox cli and updated imports with v2.
+- 2.0.5 - Updated version number.
+- 2.1.0 - Fixed some more bugs like the issues with setting prefixes, license creation, and finally added flags to the config.
+- 2.2.0 - Changed configuration to be through botbox.conf and modified add command.
+- 2.2.1 - Updated version number.
+- 2.2.2 - Updated version number.
+- 2.2.3 - Updated version number.
+- 2.2.4 - Updated README.md generation and token input is hidden.
+- 2.2.5 - Updated version number.
+- 2.2.6 - Fixed add command bug. Added MIT license to each file. Updated project template generation.
+- 2.3.0 - Added remove function and updated botbox.conf schema. Added prefix command generation support.
 
 ## License
 

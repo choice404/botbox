@@ -13,9 +13,10 @@ type BotConfig struct {
 }
 
 type CogConfig struct {
-	Name     string   `json:"name"`
-	File     string   `json:"file"`
-	Commands []string `json:"commands"`
+	Name           string   `json:"name"`
+	File           string   `json:"file"`
+	SlashCommands  []string `json:"slash_commands"`
+	PrefixCommands []string `json:"prefix_commands"`
 }
 
 type Config struct {
