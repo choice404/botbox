@@ -170,7 +170,7 @@ func addCogs(filename string) {
 	var cogContent strings.Builder
 
 	fmt.Fprintf(&cogContent, `"""
-Author %s
+Bot Author: %s
 
 %s
 %s
@@ -198,10 +198,11 @@ class %s(commands.Cog, name="%s"):
 
 		for _, arg := range command.Args {
 			fmt.Fprintf(&cogContent, `
-        %s="%s"`, arg.Name, arg.Description)
+        %s="%s",`, arg.Name, arg.Description)
 		}
 
-		fmt.Fprintf(&cogContent, `)
+		fmt.Fprintf(&cogContent, `
+  )
     async def %s(self, interaction: discord.Interaction, %s) -> %s:
         """
         %s when the user types "/%s"
