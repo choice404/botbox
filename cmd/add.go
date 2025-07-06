@@ -94,7 +94,7 @@ func addCogs(filename string) {
 	}
 
 	for {
-		cmdConfirmForm, cmdInfoForm, cmdAcceptForm := generateCmdForms()
+		cmdConfirmForm, cmdInfoForm, _ := generateCmdForms()
 		err := cmdConfirmForm.Run()
 		if err != nil {
 			fmt.Println("Error:", err)
@@ -138,6 +138,9 @@ func addCogs(filename string) {
 			argType = ""
 			argDescription = ""
 		}
+
+		_, _, cmdAcceptForm := generateCmdForms()
+
 		err = cmdAcceptForm.Run()
 		if err != nil {
 			fmt.Println("Error:", err)
