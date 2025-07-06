@@ -29,6 +29,7 @@ var removeCmd = &cobra.Command{
 You can specify the cog to remove by providing its name as an argument or select it from a list of available cogs.
   `,
 	Run: func(cmd *cobra.Command, args []string) {
+
 		rootDir, err := FindBotConf()
 		if err != nil {
 			return
@@ -45,16 +46,26 @@ You can specify the cog to remove by providing its name as an argument or select
 			cogList = append(cogList, cog.Name)
 		}
 
-		cmdRemoveForm := generateCommandRemoveForms()
+		Banner()
+		filename := ""
+		if len(args) > 0 {
+			filename = args[0]
+		}
 
-		err = cmdRemoveForm.Run()
-		if err != nil {
-			fmt.Println("Error running form:", err)
-			return
+		if filename == "" {
+			cmdRemoveForm := generateCommandRemoveForms()
+
+			err = cmdRemoveForm.Run()
+			if err != nil {
+				fmt.Println("Error running form:", err)
+				return
+			}
+
+			filename = cogName
 		}
 
 		for i, cog := range config.Cogs {
-			if cog.Name == cogName {
+			if cog.Name == filename {
 				cogRemove = cog
 				config.Cogs = slices.Delete(config.Cogs, i, i+1)
 			}
@@ -119,7 +130,7 @@ This code is licensed under the MIT License.
 
 MIT License
 
-Copyright (c) 2025 Austin
+Copyright (c) 2025 Austin Choi
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

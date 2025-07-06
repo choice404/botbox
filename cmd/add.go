@@ -32,6 +32,7 @@ var (
 	argsInput         string
 	argType           string
 	argDescription    string
+	cogContent        strings.Builder
 )
 
 var addCmd = &cobra.Command{
@@ -166,7 +167,9 @@ func addCogs(filename string) {
 
 	className := strings.ToUpper(string(filename[0])) + filename[1:]
 
-	_, err = fmt.Fprintf(file, `"""
+	var cogContent strings.Builder
+
+	fmt.Fprintf(&cogContent, `"""
 Author %s
 
 %s
@@ -185,41 +188,33 @@ class %s(commands.Cog, name="%s"):
         self.bot = bot
         print("%s cog loaded")
 `, config.BotInfo.Author, config.BotInfo.Name, config.BotInfo.Description, className, className, filename)
-	if err != nil {
-		return
-	}
 
 	for _, command := range slashCommandList {
-		var argBuilder strings.Builder
-		for i, arg := range command.Args {
-			fmt.Fprintf(&argBuilder, "%s: %s", arg.Name, arg.Type)
-			if i < len(command.Args)-1 {
-				argBuilder.WriteString(", ")
-			}
-		}
-		fullArgStr := argBuilder.String()
+		fullArgStr := buildArgString(command.Args)
 
-		_, err = fmt.Fprintf(file, `
+		fmt.Fprintf(&cogContent, `
     @app_commands.command(name="%s", description="%s")
+    @app_commands.describe(`, command.Name, command.Description)
+
+		for _, arg := range command.Args {
+			fmt.Fprintf(&cogContent, `
+        %s="%s"`, arg.Name, arg.Description)
+		}
+
+		fmt.Fprintf(&cogContent, `)
     async def %s(self, interaction: discord.Interaction, %s) -> %s:
         """
         %s when the user types "/%s"
 
-            Parameters:
-`, command.Name, command.Description, command.Name, fullArgStr, command.ReturnType, command.Description, command.Name)
-		if err != nil {
-			return
-		}
+            Parameters:`, command.Name, fullArgStr, command.ReturnType, command.Description, command.Name)
 
 		for _, arg := range command.Args {
-			_, err = fmt.Fprintf(file, `                    %s (%s): %s
-`, arg.Name, arg.Type, arg.Description)
-			if err != nil {
-				return
-			}
+			fmt.Fprintf(&cogContent, `
+                    %s (%s): %s`, arg.Name, arg.Type, arg.Description)
 		}
 
-		_, err = fmt.Fprintf(file, `
+		fmt.Fprintf(&cogContent, `
+
             Returns:
                     %s
         """
@@ -229,107 +224,58 @@ class %s(commands.Cog, name="%s"):
         except Exception as e:
             print(f"Error: {e}")
             await interaction.response.send_message(f"Error: {e}", ephemeral=True)
-`, command.ReturnType, command.Name)
-		if err != nil {
-			return
-		}
 
-		var retValue any
-		switch command.ReturnType {
-		case "str":
-			retValue = `""`
-		case "int":
-			retValue = 0
-		case "float":
-			retValue = 0.0
-		case "bool":
-			retValue = "False"
-		default:
-			retValue = "None"
-		}
-
-		_, err = fmt.Fprintf(file, `
-        return %v
-`, retValue)
-		if err != nil {
-			fmt.Println("Error writing return statement:", err)
-			return
-		}
+        return %s
+`, command.ReturnType, command.Name, getReturnValue(command.ReturnType))
 	}
 
 	for _, command := range prefixCommandList {
-		var argBuilder strings.Builder
-		for i, arg := range command.Args {
-			fmt.Fprintf(&argBuilder, "%s: %s", arg.Name, arg.Type)
-			if i < len(command.Args)-1 {
-				argBuilder.WriteString(", ")
-			}
-		}
-		fullArgStr := argBuilder.String()
+		fullArgStr := buildArgString(command.Args)
 
-		_, err = fmt.Fprintf(file, `
+		fmt.Fprintf(&cogContent, `
     @commands.command()
-    async def %s(self, interaction: discord.Interaction, %s) -> %s:
+    async def %s(self, ctx: commands.Context, %s) -> %s:
         """
         %s when the user types "/%s"
 
             Parameters:
 `, command.Name, fullArgStr, command.ReturnType, command.Description, command.Name)
-		if err != nil {
-			return
-		}
 
 		for _, arg := range command.Args {
-			_, err = fmt.Fprintf(file, `                    %s (%s): %s
-`, arg.Name, arg.Type, arg.Description)
-			if err != nil {
-				return
-			}
+			fmt.Fprintf(&cogContent, `
+                    %s (%s): %s`, arg.Name, arg.Type, arg.Description)
 		}
 
-		_, err = fmt.Fprintf(file, `
+		fmt.Fprintf(&cogContent, `
+
             Returns:
                     %s
         """
 
         try:
-            await interaction.response.send_message(f"%s", ephemeral=True)
+            await ctx.send(f"%s", ephemeral=True)
         except Exception as e:
             print(f"Error: {e}")
-            await interaction.response.send_message(f"Error: {e}", ephemeral=True)
-`, command.ReturnType, command.Name)
-		if err != nil {
-			return
-		}
+            await ctx.send(f"Error: {e}", ephemeral=True)
 
-		var retValue any
-		switch command.ReturnType {
-		case "str":
-			retValue = `""`
-		case "int":
-			retValue = 0
-		case "float":
-			retValue = 0.0
-		case "bool":
-			retValue = "False"
-		default:
-			retValue = "None"
-		}
-
-		_, err = fmt.Fprintf(file, `
-        return %v
-`, retValue)
-		if err != nil {
-			fmt.Println("Error writing return statement:", err)
-			return
-		}
+        return %s
+`, command.ReturnType, command.Name, getReturnValue(command.ReturnType))
 	}
 
-	_, err = fmt.Fprintf(file, `
+	fmt.Fprintf(&cogContent, `
 
 async def setup(bot):
     await bot.add_cog(%s(bot))
-  `, className)
+
+"""
+File generated by BotBox - https://github.com/choice404/botbox
+"""`, className)
+
+	_, err = file.WriteString(cogContent.String())
+	if err != nil {
+		fmt.Println("Error writing to file:", err)
+		return
+	}
 
 	err = file.Sync()
 	if err != nil {
@@ -373,7 +319,6 @@ async def setup(bot):
 		fmt.Println("failed to write updated botbox.conf: %w", err)
 		return
 	}
-
 }
 
 func generateCmdForms() (*huh.Form, *huh.Form, *huh.Form) {
@@ -587,6 +532,35 @@ func validateFileName(fileName string) error {
 	return nil
 }
 
+func getReturnValue(returnType string) string {
+	switch returnType {
+	case "str":
+		return `""`
+	case "int":
+		return "0"
+	case "float":
+		return "0.0"
+	case "bool":
+		return "False"
+	default:
+		return "None"
+	}
+}
+
+func buildArgString(args []ArgInfo) string {
+	if len(args) == 0 {
+		return ""
+	}
+	var argBuilder strings.Builder
+	for i, arg := range args {
+		fmt.Fprintf(&argBuilder, "%s: %s", arg.Name, arg.Type)
+		if i < len(args)-1 {
+			argBuilder.WriteString(", ")
+		}
+	}
+	return argBuilder.String()
+}
+
 func init() {
 	rootCmd.AddCommand(addCmd)
 
@@ -613,7 +587,7 @@ This code is licensed under the MIT License.
 
 MIT License
 
-Copyright (c) 2025 Austin
+Copyright (c) 2025 Austin Choi
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -1,49 +1,62 @@
 /*
-Copyright © 2025 Austin "Choice404" Choi
+Copyright © 2025 Austin Choi austinch20@protonmail.com
 See end of file for extended copyright information
 */
 
 package cmd
 
 import (
+	"fmt"
+	"os/exec"
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 )
 
-// initCmd represents the init command
-var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initializes a Bot Box project",
-	Long: `Initializes a Bot Box project in the current directory and prompts the user for information about the bot as well as setup other default configurations in a botbox.conf file.
-  Will also create the initial project strucutre:
-
-  /
-  |- README.md
-  |- botbox.conf
-  |- run.sh
-  |- LICENSE (optional)
-  |- doppler.yaml (optional)
-  |- src/
-     |- main.py
-     |- cogs/
-        |- __init__.py
-        |- helloWorld.py (demo cog)
-        |- cogs.py
-`,
+// runCmd represents the run command
+var runCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Run the bot",
+	Long:  `Run the bot`,
 	Run: func(cmd *cobra.Command, args []string) {
-		BotBoxCreateWrapper(CreateProjectInitCallback)
+		rootDir, err := FindBotConf()
+		if err != nil {
+			fmt.Println("Error finding root directory:", err)
+			return
+		}
+
+		runCmd := exec.Command("bash", filepath.Join(rootDir, "run.sh"))
+
+		output, err := runCmd.CombinedOutput()
+		if err != nil {
+			fmt.Println("Error running the bot:", err)
+			fmt.Println("Output:", string(output))
+			return
+		}
+
+		fmt.Println("Bot is running...")
+		fmt.Println("Output:", string(output))
 	},
 }
 
-func CreateProjectInitCallback() {
-	CreateProject("./")
-}
-
 func init() {
-	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(runCmd)
+
+	// Here you will define your flags and configuration settings.
+
+	// Cobra supports Persistent Flags which will work for this command
+	// and all subcommands, e.g.:
+	// runCmd.PersistentFlags().String("foo", "", "A help for foo")
+
+	// Cobra supports local flags which will only run when this command
+	// is called directly, e.g.:
+	// runCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 /*
-Copyright © 2025 2025 Austin "Choice404" Choi
+Copyright © 2025 Austin "Choice404" Choi
+
+https://github.com/choice404/botbox
 
 Bot Box
 A discord bot template generator to help create discord bots quickly and easily

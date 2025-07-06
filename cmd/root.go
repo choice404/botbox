@@ -15,8 +15,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "botbox",
 	Short: "A CLI tool to help create and manage a cog based discord.py bot",
-	Long: `
-A discord bot template generator to help create discord
+	Long: ` A discord bot template generator to help create discord
 bots quickly and easily. Forget about the boilerplate
 and focus on what really matters, what your bot will do.
 
@@ -66,7 +65,7 @@ This code is licensed under the MIT License.
 
 MIT License
 
-Copyright (c) 2025 Austin
+Copyright (c) 2025 Austin Choi
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
