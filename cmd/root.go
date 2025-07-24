@@ -19,7 +19,7 @@ var rootCmd = &cobra.Command{
 bots quickly and easily. Forget about the boilerplate
 and focus on what really matters, what your bot will do.
 
-Bot Box is built using Golang, Cobra, and Huh,
+Bot Box is built using Golang, Cobra, Bubble Tea, and Huh,
 offering an intuitive cli tool to quickly build
 Discord bot projects. It includes a cog-based architecture, ` +
 		"`.env`" + ` management, and built-in utilities for automating
@@ -28,7 +28,7 @@ bot configuration and extension development.
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
-	Version: "2.3.2",
+	Version: "2.3.3",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

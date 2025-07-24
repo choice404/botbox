@@ -8,6 +8,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/choice404/botbox/v2/cmd/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -18,89 +19,76 @@ var (
 	configDescription bool
 	configPrefix      bool
 	configCogs        bool
+	configIsOptional  bool
 
 	configCmd = &cobra.Command{
 		Use:   "config",
-		Short: "Create files for the project",
+		Short: "Get config for the project",
 		Long: `Create different types of files for the discord bot.
 Main files
 Cogs
 Config`,
 		Run: func(cmd *cobra.Command, args []string) {
-			rootDir, err := FindBotConf()
+
+			if configName || configDir || configAuthor || configDescription || configPrefix || configCogs {
+				configIsOptional = true
+			} else {
+				configIsOptional = false
+			}
+
+			_, err := utils.FindBotConf()
 			if err != nil {
 				fmt.Println("Current directory is not in a botbox project.")
 				return
 			}
-			if configName || configDir || configAuthor || configDescription || configPrefix || configCogs {
-				displayPartialConfig(rootDir)
-			} else {
-				displayConfig(rootDir)
-			}
+
+			model := utils.ConfigModel(configCallback, configInitCallback)
+
+			utils.CupSleeve(&model)
 		},
 	}
 )
 
-func displayConfig(rootDir string) {
-	config, err := LoadConfig()
+func configInitCallback(modelValues map[string]*string, allFormsModels []map[string]*string) {
+
+	config, err := utils.LoadConfig()
+	rootDir, err := utils.FindBotConf()
 	if err != nil {
 		fmt.Println("Error loading configuration:", err)
 		return
 	}
 
-	fmt.Println("Bot Box project configuration:")
-	fmt.Println("Bot Name:", config.BotInfo.Name)
-	fmt.Println("Root Directory:", rootDir)
-	fmt.Println("Author:", config.BotInfo.Author)
-	fmt.Println("Description:", config.BotInfo.Description)
-	fmt.Println("Command Prefix:", config.BotInfo.CommandPrefix)
-	fmt.Println("Cogs:")
-	for _, cog := range config.Cogs {
-		fmt.Printf(" - %s(%s)\n", cog.File, cog.Name)
-		for _, slashCommand := range cog.SlashCommands {
-			fmt.Printf("   - Slash Command: %s\n", slashCommand)
+	if configName || !configIsOptional {
+		modelValues["botName"] = &config.BotInfo.Name
+	}
+	if configDir || !configIsOptional {
+		modelValues["rootDir"] = &rootDir
+	}
+	if configAuthor || !configIsOptional {
+		modelValues["botAuthor"] = &config.BotInfo.Author
+	}
+	if configDescription || !configIsOptional {
+		modelValues["botDescription"] = &config.BotInfo.Description
+	}
+	if configPrefix || !configIsOptional {
+		modelValues["botPrefix"] = &config.BotInfo.CommandPrefix
+	}
+	if configCogs || !configIsOptional {
+		var cogConfigs string
+		if len(config.Cogs) > 0 {
+			cogConfigs, err = utils.CogConfigSliceToJSON(config.Cogs)
+			if err != nil {
+				fmt.Println("Error converting cogs to JSON:", err)
+				return
+			}
+		} else {
+			cogConfigs = "[]"
 		}
-		for _, prefixCommand := range cog.PrefixCommands {
-			fmt.Printf("   - Prefix Command: %s\n", prefixCommand)
-		}
+		modelValues["cogs"] = &cogConfigs
 	}
 }
 
-func displayPartialConfig(rootDir string) {
-	config, err := LoadConfig()
-	if err != nil {
-		fmt.Println("Error loading configuration:", err)
-		return
-	}
-
-	fmt.Println("Bot Box project configuration:")
-	if configName {
-		fmt.Println("Bot Name:", config.BotInfo.Name)
-	}
-	if configDir {
-		fmt.Println("Root Directory:", rootDir)
-	}
-	if configAuthor {
-		fmt.Println("Author:", config.BotInfo.Author)
-	}
-	if configDescription {
-		fmt.Println("Description:", config.BotInfo.Description)
-	}
-	if configPrefix {
-		fmt.Println("Command Prefix:", config.BotInfo.CommandPrefix)
-	}
-	if configCogs {
-		fmt.Println("Cogs:")
-		for _, cog := range config.Cogs {
-			fmt.Printf(" - %s(%s)\n", cog.File, cog.Name)
-			for _, slashCommand := range cog.SlashCommands {
-				fmt.Printf("   - Slash Command: %s\n", slashCommand)
-			}
-			for _, prefixCommand := range cog.PrefixCommands {
-				fmt.Printf("   - Prefix Command: %s\n", prefixCommand)
-			}
-		}
-	}
+func configCallback(values map[string]string) {
 }
 
 func init() {

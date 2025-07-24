@@ -12,28 +12,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/huh"
+	"github.com/choice404/botbox/v2/cmd/utils"
 	"github.com/spf13/cobra"
 )
 
-var (
-	cogName     string
-	cogClass    string
-	cogFunction string
-
-	slashCommandList  []CommandInfo
-	prefixCommandList []CommandInfo
-	command           string
-	commandConfirm    bool
-	description       string
-	returnType        string
-	cmdType           string
-	args              []ArgInfo
-	argsInput         string
-	argType           string
-	argDescription    string
-	cogContent        strings.Builder
-)
+var ()
 
 var addCmd = &cobra.Command{
 	Use:   "add",
@@ -42,123 +25,28 @@ var addCmd = &cobra.Command{
 You can specify the cog structure as well as create commands for the cog.
 `,
 	Run: func(cmd *cobra.Command, args []string) {
-		fileNameForm := huh.NewForm(
-			huh.NewGroup(
-				huh.NewInput().
-					Key("filename").
-					Title("Enter the filename").
-					Prompt("> ").
-					Validate(func(s string) error {
-						err := validateFileName(s)
-						if err != nil {
-							return err
-						}
-						return nil
-					}),
-			),
-		)
+		_, err := utils.FindBotConf()
+		if err != nil {
+			fmt.Println("Current directory is not in a botbox project.")
+			return
+		}
 
-		Banner()
-		filename := ""
-		if len(args) > 0 {
-			filename = args[0]
-			err := validateFileName(filename)
-			if err != nil {
-				fmt.Println("Error:", err)
-				return
-			}
-		}
-		if filename == "" {
-			err := fileNameForm.Run()
-			if err != nil {
-				fmt.Println("Error:", err)
-				return
-			}
-			filename = fileNameForm.GetString("filename")
-		}
-		addCogs(filename)
+		model := utils.AddModel(addCallback)
+		utils.CupSleeve(&model)
 	},
 }
 
-func addCogs(filename string) {
-	rootDir, err := FindBotConf()
-	if err != nil {
-		fmt.Println("Error finding bot config:", err)
-		return
-	}
-
-	config, err := LoadConfig()
+func addCallback(values map[string]string) {
+	rootDir, err := utils.FindBotConf()
+	config, err := utils.LoadConfig()
 	if err != nil {
 		fmt.Println("Error loading config:", err)
 		return
 	}
 
-	for {
-		cmdConfirmForm, cmdInfoForm, _ := generateCmdForms()
-		err := cmdConfirmForm.Run()
-		if err != nil {
-			fmt.Println("Error:", err)
-			return
-		}
-
-		if !cmdConfirmForm.GetBool("confirm") {
-			break
-		}
-
-		err = cmdInfoForm.Run()
-		if err != nil {
-			fmt.Println("Error:", err)
-			return
-		}
-
-		command = cmdInfoForm.GetString("name")
-		description = cmdInfoForm.GetString("description")
-		returnType = cmdInfoForm.GetString("returnType")
-		cmdType = cmdInfoForm.GetString("cmdType")
-		for {
-			argConfirmForm, argInfoForm := generateArgForms()
-			err := argConfirmForm.Run()
-			if err != nil {
-				fmt.Println("Error:", err)
-				return
-			}
-			if !argConfirmForm.GetBool("confirm") {
-				break
-			}
-			err = argInfoForm.Run()
-			if err != nil {
-				fmt.Println("Error:", err)
-				return
-			}
-			argsInput = argInfoForm.GetString("name")
-			argType = argInfoForm.GetString("type")
-			argDescription = argInfoForm.GetString("description")
-			args = append(args, ArgInfo{Name: argsInput, Type: argType, Description: argDescription})
-			argsInput = ""
-			argType = ""
-			argDescription = ""
-		}
-
-		_, _, cmdAcceptForm := generateCmdForms()
-
-		err = cmdAcceptForm.Run()
-		if err != nil {
-			fmt.Println("Error:", err)
-			return
-		}
-		if cmdAcceptForm.GetBool("confirm") {
-			if cmdType == "slash" {
-				slashCommandList = append(slashCommandList, CommandInfo{Name: command, Description: description, Args: args, ReturnType: returnType})
-			} else if cmdType == "prefix" {
-				prefixCommandList = append(prefixCommandList, CommandInfo{Name: command, Description: description, Args: args, ReturnType: returnType})
-			}
-		}
-		command = ""
-		description = ""
-		returnType = ""
-		cmdType = ""
-		args = []ArgInfo{}
-	}
+	filename := values["filename"]
+	slashCommandList, _ := utils.JSONToCmdInfoSlice(values["slashCommands"])
+	prefixCommandList, _ := utils.JSONToCmdInfoSlice(values["prefixCommands"])
 
 	filePath := filepath.Join(rootDir, "src", "cogs", filename+".py")
 	file, err := os.Create(filePath)
@@ -183,8 +71,12 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
+
+GUILD_ID = int(os.getenv("GUILD_ID", 0))
+GUILD = discord.Object(id=GUILD_ID) if GUILD_ID else None
 
 class %s(commands.Cog, name="%s"):
     def __init__(self, bot) -> None:
@@ -196,16 +88,27 @@ class %s(commands.Cog, name="%s"):
 		fullArgStr := buildArgString(command.Args)
 
 		fmt.Fprintf(&cogContent, `
-    @app_commands.command(name="%s", description="%s")
-    @app_commands.describe(`, command.Name, command.Description)
+    @app_commands.command(name="%s", description="%s")`, command.Name, command.Description)
 
-		for _, arg := range command.Args {
-			fmt.Fprintf(&cogContent, `
+		if fullArgStr != "" {
+			cogContent.WriteString(`
+    @app_commands.describe(`)
+
+			for _, arg := range command.Args {
+				fmt.Fprintf(&cogContent, `
         %s="%s",`, arg.Name, arg.Description)
+			}
+
+			fmt.Fprintf(&cogContent, `
+    )`)
+		}
+
+		if command.Scope == "guild" {
+			fmt.Fprintf(&cogContent, `
+    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions`)
 		}
 
 		fmt.Fprintf(&cogContent, `
-  )
     async def %s(self, interaction: discord.Interaction, %s) -> %s:
         """
         %s when the user types "/%s"
@@ -287,21 +190,22 @@ File generated by BotBox - https://github.com/choice404/botbox
 		return
 	}
 
-	cog := CogConfig{
+	cog := utils.CogConfig{
 		Name:           strings.ToUpper(string(filename[0])) + filename[1:],
 		File:           strings.ToLower(string(filename[0])) + filename[1:],
-		SlashCommands:  []string{},
-		PrefixCommands: []string{},
+		SlashCommands:  []utils.CommandInfo{},
+		PrefixCommands: []utils.CommandInfo{},
 	}
 
 	for _, slashCommand := range slashCommandList {
-		cog.SlashCommands = append(cog.SlashCommands, slashCommand.Name)
+		cog.SlashCommands = append(cog.SlashCommands, slashCommand)
 	}
 
 	for _, prefixCommand := range prefixCommandList {
-		cog.PrefixCommands = append(cog.PrefixCommands, prefixCommand.Name)
+		cog.PrefixCommands = append(cog.PrefixCommands, prefixCommand)
 	}
 
+	cog.Env = "development"
 	config.Cogs = append(config.Cogs, cog)
 
 	jsonData, err := json.MarshalIndent(config, "", "  ")
@@ -310,7 +214,7 @@ File generated by BotBox - https://github.com/choice404/botbox
 		return
 	}
 
-	confDir, err := FindBotConf()
+	confDir, err := utils.FindBotConf()
 	if err != nil {
 		fmt.Println("Error: %w", err)
 		return
@@ -323,217 +227,6 @@ File generated by BotBox - https://github.com/choice404/botbox
 		fmt.Println("failed to write updated botbox.conf: %w", err)
 		return
 	}
-}
-
-func generateCmdForms() (*huh.Form, *huh.Form, *huh.Form) {
-	cmdStartForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Key("confirm").
-				Title("Do you want to add a command?").
-				Affirmative("yes").
-				Negative("no"),
-		),
-	)
-
-	cmdInfoForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Key("name").
-				Title("Enter the command name").
-				Prompt("> ").
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("command name cannot be empty")
-					}
-					if strings.Contains(s, " ") {
-						return fmt.Errorf("command name cannot contain spaces")
-					}
-					if commandExists(s, append(slashCommandList, prefixCommandList...)) {
-						return fmt.Errorf("command name already exists")
-					}
-					return nil
-				}),
-
-			huh.NewSelect[string]().
-				Key("cmdType").
-				Title("Select the command type").
-				Options(
-					huh.NewOption("slash", "slash"),
-					huh.NewOption("prefix", "prefix"),
-				).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("return type cannot be empty")
-					}
-					if s != "slash" && s != "prefix" {
-						return fmt.Errorf("return type must either slash or prefix")
-					}
-					return nil
-				}),
-
-			huh.NewText().
-				Key("description").
-				Title("Enter the command description").
-				CharLimit(400).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("description cannot be empty")
-					}
-					return nil
-				}),
-
-			huh.NewSelect[string]().
-				Key("returnType").
-				Title("Enter the command return type").
-				Options(
-					huh.NewOption("str", "str"),
-					huh.NewOption("int", "int"),
-					huh.NewOption("float", "float"),
-					huh.NewOption("bool", "bool"),
-					huh.NewOption("None", "None"),
-				).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("return type cannot be empty")
-					}
-					if s != "str" && s != "int" && s != "float" && s != "bool" && s != "None" {
-						return fmt.Errorf("return type must be one of str, int, float, bool, None")
-					}
-					return nil
-				}),
-		),
-	)
-	cmdAcceptForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewNote().
-				Title("Command Info").
-				Description(fmt.Sprintf("Command Name: %s\nCommand Type: %s\nDescription: %s\nReturn Type: %s\nArguments: %v", command, cmdType, description, returnType, args)),
-			huh.NewConfirm().
-				Title("Does everything look correct?").
-				Key("confirm").
-				Affirmative("yes").
-				Negative("no"),
-		),
-	)
-
-	return cmdStartForm, cmdInfoForm, cmdAcceptForm
-}
-
-func generateArgForms() (*huh.Form, *huh.Form) {
-	argStartForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Key("confirm").
-				Title("Do you want to add an argument?").
-				Affirmative("yes").
-				Negative("no"),
-		),
-	)
-
-	argInfoForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Key("name").
-				Title("Enter the argument name").
-				Prompt("> ").
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("Argument name cannot be empty")
-					}
-					if strings.Contains(s, " ") {
-						return fmt.Errorf("Argument name cannot contain spaces")
-					}
-					if argExists(s, args) {
-						return fmt.Errorf("Argument name already exists")
-					}
-					return nil
-				}),
-
-			huh.NewText().
-				Key("description").
-				Title("Enter the argument description").
-				CharLimit(200).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("argument description cannot be empty")
-					}
-					return nil
-				}),
-
-			huh.NewSelect[string]().
-				Key("type").
-				Title("Enter the argument type").
-				Options(
-					huh.NewOption("str", "str"),
-					huh.NewOption("int", "int"),
-					huh.NewOption("float", "float"),
-					huh.NewOption("bool", "bool"),
-					huh.NewOption("None", "None"),
-				).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("argument type cannot be empty")
-					}
-					if s != "str" && s != "int" && s != "float" && s != "bool" && s != "None" {
-						return fmt.Errorf("argument type must be one of str, int, float, bool, None")
-					}
-					return nil
-				}),
-		),
-	)
-
-	return argStartForm, argInfoForm
-}
-
-func commandExists(commandName string, commandList []CommandInfo) bool {
-	for _, cmd := range commandList {
-		if cmd.Name == commandName {
-			return true
-		}
-	}
-	return false
-}
-
-func argExists(argName string, args []ArgInfo) bool {
-	for _, arg := range args {
-		if arg.Name == argName {
-			return true
-		}
-	}
-	return false
-}
-
-func fileExists(fileName string) bool {
-	rootDir, err := FindBotConf()
-	filePath := filepath.Join(rootDir, "src", "cogs", fileName+".py")
-	_, err = os.Stat(filePath)
-	if err == nil {
-		return true
-	}
-	if os.IsNotExist(err) {
-		return false
-	}
-	return false
-}
-
-func validateFileName(fileName string) error {
-	if fileExists(fileName) {
-		return fmt.Errorf("file with name '%s' already exists", fileName)
-	}
-	if fileName == "" {
-		return fmt.Errorf("filename cannot be empty")
-	}
-	if strings.Contains(fileName, " ") {
-		return fmt.Errorf("filename cannot contain spaces")
-	}
-	if strings.Contains(fileName, ".") || strings.Contains(fileName, "/") || strings.Contains(fileName, "\\") {
-		return fmt.Errorf("filename cannot contain '.' or '/' or '\\'")
-	}
-	if strings.Contains(fileName, "-") || strings.Contains(fileName, ":") || strings.Contains(fileName, "*") || strings.Contains(fileName, "?") || strings.Contains(fileName, "\"") {
-		return fmt.Errorf("filename cannot contain '-', ':', '*', '?', or '\"'")
-	}
-	return nil
 }
 
 func getReturnValue(returnType string) string {
@@ -551,7 +244,7 @@ func getReturnValue(returnType string) string {
 	}
 }
 
-func buildArgString(args []ArgInfo) string {
+func buildArgString(args []utils.ArgInfo) string {
 	if len(args) == 0 {
 		return ""
 	}

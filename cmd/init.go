@@ -6,10 +6,10 @@ See end of file for extended copyright information
 package cmd
 
 import (
+	"github.com/choice404/botbox/v2/cmd/utils"
 	"github.com/spf13/cobra"
 )
 
-// initCmd represents the init command
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initializes a Bot Box project",
@@ -30,12 +30,13 @@ var initCmd = &cobra.Command{
         |- cogs.py
 `,
 	Run: func(cmd *cobra.Command, args []string) {
-		BotBoxCreateWrapper(CreateProjectInitCallback)
+		model := utils.CreateModel(CreateProjectInitCallback)
+		utils.CupSleeve(&model)
 	},
 }
 
-func CreateProjectInitCallback() {
-	CreateProject("./")
+func CreateProjectInitCallback(values map[string]string) {
+	utils.CreateProject("./", values)
 }
 
 func init() {

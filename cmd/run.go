@@ -10,16 +10,16 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/choice404/botbox/v2/cmd/utils"
 	"github.com/spf13/cobra"
 )
 
-// runCmd represents the run command
 var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Run the bot",
 	Long:  `Run the bot`,
 	Run: func(cmd *cobra.Command, args []string) {
-		rootDir, err := FindBotConf()
+		rootDir, err := utils.FindBotConf()
 		if err != nil {
 			fmt.Println("Error finding root directory:", err)
 			return

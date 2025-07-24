@@ -8,12 +8,13 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/huh"
+	"github.com/choice404/botbox/v2/cmd/utils"
 	"github.com/spf13/cobra"
 )
 
-// createCmd represents the create command
 var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Creates a new Bot Box project",
@@ -47,19 +48,29 @@ var createCmd = &cobra.Command{
 			),
 		)
 
-		_, err := FindBotConf()
+		_, err := utils.FindBotConf()
 		if err == nil {
 			botBoxExistsForm.Run()
 			if !createNewProject {
 				return
 			}
 		}
-		BotBoxCreateWrapper(createProjectCallback)
+		model := utils.CreateModel(createProjectCallback)
+		utils.CupSleeve(&model)
 	},
 }
 
-func createProjectCallback() {
-	rootDir := botName
+func createProjectCallback(values map[string]string) {
+	rootDir := values["botName"]
+
+	if !filepath.IsAbs(rootDir) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Printf("Error getting current directory: %v\n", err)
+			return
+		}
+		rootDir = filepath.Join(cwd, rootDir)
+	}
 
 	if _, err := os.Stat(rootDir); err == nil && !os.IsNotExist(err) {
 		fmt.Printf("Directory %s already exists. Please choose a different name.\n", rootDir)
@@ -75,7 +86,7 @@ func createProjectCallback() {
 		return
 	}
 
-	CreateProject(rootDir)
+	utils.CreateProject(rootDir, values)
 }
 
 func init() {
