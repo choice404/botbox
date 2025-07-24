@@ -503,6 +503,9 @@ async def on_ready():
         if 'name' not in cog_config:
             print("❌ Cog configuration is missing 'name' key.")
             continue
+        if 'env' not in cog_config:
+            print(f"❌ Cog configuration is missing 'env' key.")
+            continue
         if cog_config['env'] not in bot.environments:
             print(f"❌ Skipping cog {cog_config['name']}: Not in current environments -  {bot.environments}")
             continue
@@ -663,7 +666,7 @@ class CogManagement(commands.Cog, name="Cog Management"):
         except Exception as e:
             await interaction.response.send_message(f'❌ Failed to reload {cog_name}: {e}', ephemeral=True)
 
-        self.bot.syncing()
+        await self.bot.syncing()
 
     @app_commands.command(name="reload-all-cogs", description="Reloads all cogs")
     @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
@@ -697,7 +700,7 @@ class CogManagement(commands.Cog, name="Cog Management"):
         else:
             await interaction.response.send_message(f'✅ Successfully reloaded all {success_count} cogs!', ephemeral=True)
 
-        self.bot.syncing()
+        await self.bot.syncing()
 
     @app_commands.command(name="list-cogs", description="Lists all available cogs")
     @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
@@ -748,7 +751,7 @@ class CogManagement(commands.Cog, name="Cog Management"):
             await interaction.response.send_message(f'✅ Unloaded {cog_name}', ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f'❌ Failed to unload {cog_name}: {e}', ephemeral=True)
-        self.bot.syncing()
+        await self.bot.syncing()
 
     @app_commands.command(name="load-cog", description="Loads a cog by name")
     @app_commands.describe(
@@ -778,7 +781,7 @@ class CogManagement(commands.Cog, name="Cog Management"):
             await interaction.response.send_message(f'✅ Loaded {cog_name}', ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f'❌ Failed to load {cog_name}: {e}', ephemeral=True)
-        self.bot.syncing()
+        await self.bot.syncing()
 
 async def setup(bot):
     await bot.add_cog(CogManagement(bot))

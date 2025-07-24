@@ -13,8 +13,6 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
-var ()
-
 /**
  * Create Forms and Model Generators
  */
