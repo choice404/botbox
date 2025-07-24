@@ -35,7 +35,11 @@
 
 **Bot Box** is your ultimate companion for creating Discord bots with ease. Forget the tedious boilerplate and dive straight into building the unique functionalities that make your bot stand out.
 
-Built with **Go**, `cobra-cli`, and `huh`, Bot Box offers an intuitive command-line interface to quickly generate Discord bot projects. It champions a **cog-based architecture** for modularity, simplifies `.env` management, and provides built-in utilities to automate bot configuration and extension development.
+Want to learn more? Check out our new [website](https://botbox-web.vercel.app/)!
+Also includes detailed [documentation](https://botbox-web.vercel.app/docs/) on how to use BotBox!
+
+<!--TODO: Update links for golang modules-->
+Built with **Go**, [`Cobra`](https://github.com/spf13/cobra), [`Bubble Tea`](https://github.com/charmbracelet/bubbletea) and [`Huh`](https://github.com/charmbracelet/huh), Bot Box offers an intuitive command-line interface to quickly generate Discord bot projects. It champions a **cog-based architecture** for modularity, simplifies `.env` management, and provides built-in utilities to automate bot configuration and extension development.
 
 ---
 
@@ -105,14 +109,14 @@ Use this command to set up a new Bot Box project in your current working directo
 ### Add a new cog to the current Bot Box project
 
 ```sh
-botbox add [name]
+botbox add
 ```
 
 It is highly recommended to use `botbox add` to generate new cogs within your projects. While you *can* manually add cogs, this will incur overhead as you'll need to manually update `botbox.conf` and potentially `main.py`.
 
 You'll be prompted to define:
 
--   Cog name (if not provided in the command)
+-   Cog name
 -   Command names and descriptions
 -   Argument names, types, and descriptions
 -   Return types
@@ -122,10 +126,10 @@ The new cog will be saved in the `cogs/` directory and automatically registered 
 ### Remove a cog from the current Bot Box project
 
 ```sh
-botbox remove [name]
+botbox remove
 ```
 
-You'll be prompted to select a cog to remove if `[name]` is not provided. This command will also update `botbox.conf` accordingly.
+You'll be prompted to select a cog to remove. This command will also update `botbox.conf` accordingly.
 
 ### Display current Bot Box project configuration
 
@@ -153,18 +157,24 @@ Example `botbox.conf` structure:
     "name": "botbox",
     "command_prefix": "!",
     "author": "Austin \"Choice404\" Choi",
-    "description": "The bot description"
+    "description": "A really cool bot!"
   },
-  "cogs": [
-    {
-      "name": "HelloWorld",
-      "file": "helloWorld",
-      "slash_commands": [
-        "hello"
-      ],
-      "prefix_commands": []
-    }
-  ]
+  "cogs": [{
+    "name": "HelloWorld",
+    "file": "helloWorld",
+    "env": "development",
+    "slash_commands": [
+      {
+        "Name": "hello",
+        "Scope": "guild",
+        "Type": "slash",
+        "Description": "HelloWorld!",
+        "Args": [],
+        "ReturnType": "None"
+      }
+    ],
+    "prefix_commands": []
+  },
 }
 ```
 
@@ -182,9 +192,10 @@ Example `botbox.conf` structure:
 
 ## 🛣️ Roadmap (TODO)
 
--   [ ] Expand `botbox.conf` to include:
-    -   [ ] More details about each command provided via `botbox add`.
+-   [x] Expand `botbox.conf` to include:
+    -   [x] More details about each command provided via `botbox add`.
     -   [ ] Expected bot responses.
+-   [ ] Add a proper changelog
 -   [ ] New commands:
     -   [ ] `botbox edit` command for modifying existing cogs/commands.
 -   [ ] Advanced dynamic bot building:
@@ -194,6 +205,9 @@ Example `botbox.conf` structure:
 
 ## 📜 Version History
 
+-   **2.4.0**: Wrapped all of the Huh forms in Tea for more complex functionality and smoother UX. Updated configuration to be more detailed and added more functionality for development.
+-   **2.3.2**: Updated the add command so that the confirmation for command information is displayed properly
+-   **2.3.1**: Fixed up some small stuff in the file generation here and there, version numberring, etc.
 -   **2.3.0**: Added `remove` command; updated `botbox.conf` schema; improved prefix command generation support.
 -   **2.2.6**: Fixed `add` command bug; added MIT license to generated files; updated project template.
 -   **2.2.4**: Improved `README.md` generation; token input is now hidden.
