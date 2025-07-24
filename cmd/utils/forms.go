@@ -643,7 +643,7 @@ func addArgInfoFormGenerator(values map[string]*string, modelValues map[string]*
 					if s == "" {
 						return fmt.Errorf("argument type cannot be empty")
 					}
-					if s != "str" && s != "int" && s != "float" && s != "bool" && s != "None" && s != "discord.Member" && s != "discord.Role" {
+					if s != "str" && s != "int" && s != "float" && s != "bool" && s != "discord.Member" && s != "discord.Role" {
 						return fmt.Errorf("argument type must be one of str, int, float, bool, discord.Member, discord.Role")
 					}
 					return nil

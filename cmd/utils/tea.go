@@ -8,6 +8,7 @@ package utils
 import (
 	"fmt"
 	"maps"
+	"math"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -172,17 +173,10 @@ type Model struct {
 	displayKeys     []string
 }
 
-func min(x, y int) int {
-	if x > y {
-		return y
-	}
-	return x
-}
-
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = min(msg.Width, maxWidth) - m.styles.Base.GetHorizontalFrameSize()
+		m.width = int(math.Min(float64(msg.Width), float64(maxWidth))) - m.styles.Base.GetHorizontalFrameSize()
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
