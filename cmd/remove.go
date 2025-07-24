@@ -12,14 +12,14 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/charmbracelet/huh"
+	"github.com/choice404/botbox/v2/cmd/utils"
 	"github.com/spf13/cobra"
 )
 
 var (
-	cogList       []string
 	cogRemoveName string
-	cogRemove     CogConfig
+	cogRemove     utils.CogConfig
+	cogName       string
 )
 
 var removeCmd = &cobra.Command{
@@ -29,79 +29,47 @@ var removeCmd = &cobra.Command{
 You can specify the cog to remove by providing its name as an argument or select it from a list of available cogs.
   `,
 	Run: func(cmd *cobra.Command, args []string) {
-
-		rootDir, err := FindBotConf()
-		if err != nil {
-			return
-		}
-
-		configPath := filepath.Join(rootDir, "botbox.conf")
-
-		config, err := LoadConfig()
-		if err != nil {
-			fmt.Println("Error loading config:", err)
-			return
-		}
-		for _, cog := range config.Cogs {
-			cogList = append(cogList, cog.Name)
-		}
-
-		Banner()
-		filename := ""
-		if len(args) > 0 {
-			filename = args[0]
-		}
-
-		if filename == "" {
-			cmdRemoveForm := generateCommandRemoveForms()
-
-			err = cmdRemoveForm.Run()
-			if err != nil {
-				fmt.Println("Error running form:", err)
-				return
-			}
-
-			filename = cogName
-		}
-
-		for i, cog := range config.Cogs {
-			if cog.Name == filename {
-				cogRemove = cog
-				config.Cogs = slices.Delete(config.Cogs, i, i+1)
-			}
-		}
-
-		jsonData, err := json.MarshalIndent(config, "", "  ")
-		if err != nil {
-			fmt.Println("failed to marshal config to JSON: %w", err)
-			return
-		}
-
-		err = os.Remove(rootDir + "/src/cogs/" + cogRemove.File + ".py")
-
-		err = os.WriteFile(configPath, jsonData, 0644)
-		if err != nil {
-			fmt.Println("failed to write updated botbox.conf: %w", err)
-			return
-		}
-
+		model := utils.RemoveModel(removeCallback)
+		utils.CupSleeve(&model)
 	},
 }
 
-func generateCommandRemoveForms() *huh.Form {
-	cmdRemoveForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Value(&cogName).
-				Height(8).
-				Title("Select a cog to remove").
-				OptionsFunc(func() []huh.Option[string] {
-					return huh.NewOptions(cogList...)
-				}, &cogName),
-		),
-	)
+func removeCallback(values map[string]string) {
+	filename := values["cogName"]
 
-	return cmdRemoveForm
+	rootDir, err := utils.FindBotConf()
+	if err != nil {
+		return
+	}
+
+	configPath := filepath.Join(rootDir, "botbox.conf")
+
+	config, err := utils.LoadConfig()
+	if err != nil {
+		fmt.Println("Error loading config:", err)
+		return
+	}
+
+	for i, cog := range config.Cogs {
+		if cog.Name == filename {
+			cogRemove = cog
+			config.Cogs = slices.Delete(config.Cogs, i, i+1)
+		}
+	}
+
+	jsonData, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		fmt.Println("failed to marshal config to JSON: %w", err)
+		return
+	}
+
+	err = os.Remove(rootDir + "/src/cogs/" + cogRemove.File + ".py")
+
+	err = os.WriteFile(configPath, jsonData, 0644)
+	if err != nil {
+		fmt.Println("failed to write updated botbox.conf: %w", err)
+		return
+	}
 }
 
 func init() {

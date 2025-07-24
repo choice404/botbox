@@ -3,7 +3,7 @@ Copyright © 2025 Austin Choi austinch20@protonmail.com
 See end of file for extended copyright information
 */
 
-package cmd
+package utils
 
 import (
 	"encoding/json"
@@ -15,22 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/huh/spinner"
-)
-
-var (
-	botName                string
-	botDescription         string
-	botAuthor              string
-	botPrefix              string
-	botTokenDopplerProject string
-	botGuildDopplerEnv     string
-	envChoice              string
-	licenseType            string
-	licenseText            string
 )
 
 func Banner() {
@@ -78,131 +64,6 @@ func FindBotConf() (string, error) {
 	}
 
 	return "", fmt.Errorf("Not a botbox project: %s", originalDir)
-}
-
-func BotBoxCreateWrapper(actionCallback func()) {
-	Banner()
-	botBoxConfigForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Enter the name of your bot").
-				Prompt("> ").
-				Value(&botName).
-				Validate(func(s string) error {
-					if botName == "" {
-						return fmt.Errorf("bot name cannot be empty")
-					}
-					if len(s) > 20 {
-						return fmt.Errorf("bot name is too long")
-					}
-					r := []rune(s)[0]
-					if !unicode.IsLetter(r) {
-						return fmt.Errorf("bot name must start with a letter")
-					}
-					return nil
-				}),
-
-			huh.NewText().
-				Title("Enter a description of your bot").
-				Value(&botDescription).
-				CharLimit(100),
-
-			huh.NewInput().
-				Title("Enter the author of your bot").
-				Prompt("> ").
-				Value(&botAuthor).
-				Validate(func(s string) error {
-					if botAuthor == "" {
-						return fmt.Errorf("author name cannot be empty")
-					}
-					return nil
-				}),
-
-			huh.NewInput().
-				Title("Enter the command prefix for your bot (default: '!')").
-				Prompt("> ").
-				Value(&botPrefix).
-				Validate(func(s string) error {
-					if s == "" {
-						botPrefix = "!"
-						return nil
-					}
-					if len(s) > 1 {
-						return fmt.Errorf("command prefix must be a single character")
-					}
-					r := []rune(s)[0]
-
-					if unicode.IsLetter(r) || unicode.IsDigit(r) {
-						return fmt.Errorf("command prefix can not be an alphanumeric character")
-					}
-					return nil
-				}),
-		),
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("How do you want to handle environment variables?").
-				Options(
-					huh.NewOption("Create a .env file", "env"),
-					huh.NewOption("Use Doppler", "doppler"),
-				).
-				Value(&envChoice),
-			huh.NewInput().
-				TitleFunc(func() string {
-					if envChoice == "env" {
-						return "Enter the bot token"
-					}
-					return "Enter the Doppler project name"
-				}, &envChoice).
-				Prompt("> ").
-				EchoMode(huh.EchoModePassword).
-				Validate(func(s string) error {
-					if envChoice == "env" {
-						if s == "" {
-							return fmt.Errorf("token cannot be empty")
-						}
-						if len(s) < 10 {
-							return fmt.Errorf("token is too short")
-						}
-					}
-					return nil
-				}).
-				Value(&botTokenDopplerProject),
-			huh.NewInput().
-				TitleFunc(func() string {
-					if envChoice == "env" {
-						return "Enter the bot guild ID"
-					}
-					return "Enter the Doppler environment name"
-				}, &envChoice).
-				Prompt("> ").
-				Value(&botGuildDopplerEnv),
-		),
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("What license do you want to use?").
-				Options(
-					huh.NewOption("MIT", "mit"),
-					huh.NewOption("Apache 2.0", "apache-2.0"),
-					huh.NewOption("GPLv3", "gpl-3.0"),
-					huh.NewOption("BSD 3-Clause", "bsd-3-clause"),
-					huh.NewOption("Unlicense", "unlicense"),
-					huh.NewOption("No license", "no-license"),
-				).
-				Value(&licenseType),
-		),
-	)
-
-	botBoxConfigForm.Run()
-
-	err := spinner.New().
-		Title("Creating project structure...").
-		Action(actionCallback).
-		Run()
-
-	if err != nil {
-		fmt.Println("Error creating project structure:", err)
-		return
-	}
 }
 
 func FetchLicense(licenseKey string) (string, error) {
@@ -254,18 +115,23 @@ func FetchLicense(licenseKey string) (string, error) {
 	return licenseResp.Body, nil
 }
 
-func CreateProject(rootDir string) {
-	if rootDir[len(rootDir)-1:] != "/" {
-		rootDir += "/"
-	}
-
+func CreateProject(rootDir string, values map[string]string) {
 	directories := []string{
 		"src",
 		"src/cogs",
 	}
 
-	if confOpt, err := CreateFileOption(rootDir + "botbox.conf"); err == nil && confOpt {
-		confFile, err := os.Create(rootDir + "botbox.conf")
+	for _, dir := range directories {
+		fullPath := filepath.Join(rootDir, dir)
+		err := os.MkdirAll(fullPath, os.ModePerm)
+		if err != nil {
+			fmt.Printf("Error creating directory %s: %v\n", fullPath, err)
+			return
+		}
+	}
+
+	if confOpt, err := CreateFileOption(filepath.Join(rootDir, "botbox.conf")); err == nil && confOpt {
+		confFile, err := os.Create(filepath.Join(rootDir, "botbox.conf"))
 		if err != nil {
 			fmt.Printf("Error creating botbox.conf file: %v\n", err)
 			return
@@ -280,28 +146,90 @@ func CreateProject(rootDir string) {
     "command_prefix": "%s",
     "author": "%s",
     "description": "%s" 
-  },`, botName, botPrefix, botAuthor, botDescription)
+  },`, values["botName"], values["botPrefix"], values["botAuthor"], values["botDescription"])
 		confContent.WriteString(`
   "cogs": [
     {
       "name": "HelloWorld",
       "file": "helloWorld",
+      "env": "development",
       "slash_commands": [
-          "hello"
+        {
+          "Name": "hello",
+          "Scope": "guild",
+          "Type": "slash",
+          "Description": "Bot responds with world",
+          "Args": [],
+          "ReturnType": "None"
+        }
       ],
       "prefix_commands": []
     },
     {
       "name": "CogManagement",
       "file": "cogs",
-      "slash_commands": [],
-      "prefix_commands": [
-        "reload_cog",
-        "reload_all_cogs",
-        "list_cogs",
-        "unload_cog",
-        "load_cog"
-      ]
+      "env": "production",
+      "slash_commands": [
+        {
+          "Name": "reload-cog",
+          "Scope": "guild",
+          "Type": "slash",
+          "Description": "Reloads a cog by name",
+          "Args": [
+          {
+            "Name": "cog_name",
+            "Type": "string",
+            "Description": "The name of the cog to reload (without .py cog)"
+          }
+          ],
+          "ReturnType": "None"
+        },
+        {
+          "Name": "reload-all-cogs",
+          "Scope": "guild",
+          "Type": "slash",
+          "Description": "Reloads all cogs",
+          "Args": [],
+          "ReturnType": "None"
+        },
+        {
+          "Name": "list-cogs",
+          "Scope": "guild",
+          "Type": "slash",
+          "Description": "Lists all available cogs",
+          "Args": [],
+          "ReturnType": "None"
+        },
+        {
+          "Name": "unload-cog",
+          "Scope": "guild",
+          "Type": "slash",
+          "Description": "Unloads a cog by name",
+          "Args": [
+          {
+            "Name": "cog_name",
+            "Type": "string",
+            "Description": "The name of the cog to unload (without .py cog)"
+          }
+          ],
+          "ReturnType": "None"
+        },
+        {
+          "Name": "load-cog",
+          "Scope": "guild",
+          "Type": "slash",
+          "Description": "Loads a cog by name",
+          "Args": [
+          {
+            "Name": "cog_name",
+            "Type": "string",
+            "Description": "The name of the cog to load (without .py cog)"
+          }
+          ],
+          "ReturnType": "None"
+        }
+      ],
+      "prefix_commands": []
     }
   ]
 }`)
@@ -315,8 +243,8 @@ func CreateProject(rootDir string) {
 		return
 	}
 
-	if readmeOpt, err := CreateFileOption(rootDir + "README.md"); err == nil && readmeOpt {
-		readmeFile, err := os.Create(rootDir + "README.md")
+	if readmeOpt, err := CreateFileOption(filepath.Join(rootDir, "README.md")); err == nil && readmeOpt {
+		readmeFile, err := os.Create(filepath.Join(rootDir, "README.md"))
 		if err != nil {
 			fmt.Printf("Error creating README.md file: %v\n", err)
 			return
@@ -369,18 +297,18 @@ chmod +x run.sh
 `+"```"+`
 
 ## License
-`, botName, botDescription, botAuthor)
+`, values["botName"], values["botDescription"], values["botAuthor"])
 
-		if licenseType != "no-license" && licenseType != "" {
+		if values["licenseType"] != "no-license" && values["licenseType"] != "" {
 			fmt.Fprintf(&readmeContent, `This project is licensed under the %s License - see the [LICENSE](LICENSE) file for details.
-    `, licenseType)
+    `, values["licenseType"])
 		} else {
 			readmeContent.WriteString(`All rights reserved.`)
 		}
 		fmt.Fprintf(&readmeContent, `
     ## Contributors
 
-- %s`, botAuthor)
+- %s`, values["botAuthor"])
 
 		readmeContent.WriteString(`
 Bot generated using BotBox - https://github.com/choice404/botbox`)
@@ -398,22 +326,22 @@ Bot generated using BotBox - https://github.com/choice404/botbox`)
 		return
 	}
 
-	if licenseType != "no-license" && licenseType != "" {
-		if licenseOpt, err := CreateFileOption(rootDir + "LICENSE"); err == nil && licenseOpt {
-			licenseFile, err := os.Create(rootDir + "LICENSE")
+	if values["licenseType"] != "no-license" && values["licenseType"] != "" {
+		if licenseOpt, err := CreateFileOption(filepath.Join(rootDir, "LICENSE")); err == nil && licenseOpt {
+			licenseFile, err := os.Create(filepath.Join(rootDir, "LICENSE"))
 			if err != nil {
 				fmt.Printf("Error creating LICENSE file: %v\n", err)
 				return
 			}
 			defer licenseFile.Close()
-			licenseText, err = FetchLicense(licenseType)
+			LicenseText, err := FetchLicense(values["licenseType"])
 
 			if err != nil {
 				fmt.Printf("Error fetching license text: %v\n", err)
 				return
 			}
 
-			_, err = fmt.Fprint(licenseFile, licenseText)
+			_, err = fmt.Fprint(licenseFile, LicenseText)
 			if err != nil {
 				fmt.Printf("Error writing to LICENSE file: %v\n", err)
 				return
@@ -426,9 +354,9 @@ Bot generated using BotBox - https://github.com/choice404/botbox`)
 		}
 	}
 
-	if envChoice == "doppler" {
-		if dopplerOpt, err := CreateFileOption(rootDir + "doppler.yaml"); err == nil && dopplerOpt {
-			dopplerFile, err := os.Create(rootDir + "doppler.yaml")
+	if values["envChoice"] == "doppler" {
+		if dopplerOpt, err := CreateFileOption(filepath.Join(rootDir, "doppler.yaml")); err == nil && dopplerOpt {
+			dopplerFile, err := os.Create(filepath.Join(rootDir, "doppler.yaml"))
 			if err != nil {
 				fmt.Printf("Error creating doppler.yaml file: %v\n", err)
 				return
@@ -437,16 +365,16 @@ Bot generated using BotBox - https://github.com/choice404/botbox`)
 			_, err = fmt.Fprintf(dopplerFile, `setup:
   - project: %s
     config: %s
-`, botTokenDopplerProject, botGuildDopplerEnv)
+`, values["botTokenDopplerProject"], values["botGuildDopplerEnv"])
 		} else if err == nil && !dopplerOpt {
 			fmt.Println("Not overriding doppler.yaml file.")
 		} else {
 			fmt.Printf("Error creating doppler.yaml file: %v\n", err)
 			return
 		}
-	} else if envChoice == "env" {
-		if envOpt, err := CreateFileOption(rootDir + ".env"); err == nil && envOpt {
-			envFile, err := os.Create(rootDir + ".env")
+	} else if values["envChoice"] == "env" {
+		if envOpt, err := CreateFileOption(filepath.Join(rootDir, ".env")); err == nil && envOpt {
+			envFile, err := os.Create(filepath.Join(rootDir, ".env"))
 			if err != nil {
 				fmt.Printf("Error creating .env file: %v\n", err)
 				return
@@ -454,7 +382,7 @@ Bot generated using BotBox - https://github.com/choice404/botbox`)
 			defer envFile.Close()
 			_, err = fmt.Fprintf(envFile, `DISCORD_TOKEN=%s
 DISCORD_GUILD=%s
-`, botTokenDopplerProject, botGuildDopplerEnv)
+`, values["botTokenDopplerProject"], values["botGuildDopplerEnv"])
 			if err != nil {
 				fmt.Printf("Error writing to .env file: %v\n", err)
 				return
@@ -465,15 +393,15 @@ DISCORD_GUILD=%s
 			fmt.Printf("Error creating .env file: %v\n", err)
 			return
 		}
-	} else if envChoice == "none" {
+	} else if values["envChoice"] == "none" {
 		fmt.Println("No environment file will be created.")
 	} else {
 		fmt.Println("Invalid environment choice.")
 		return
 	}
 
-	if runOpt, err := CreateFileOption(rootDir + "run.sh"); err == nil && runOpt {
-		runFile, err := os.Create(rootDir + "run.sh")
+	if runOpt, err := CreateFileOption(filepath.Join(rootDir, "run.sh")); err == nil && runOpt {
+		runFile, err := os.Create(filepath.Join(rootDir, "run.sh"))
 		if err != nil {
 			fmt.Printf("Error creating run.sh file: %v\n", err)
 			return
@@ -490,7 +418,7 @@ DISCORD_GUILD=%s
 
 `)
 
-		if envChoice == "doppler" {
+		if values["envChoice"] == "doppler" {
 			runScriptContent.WriteString("doppler run -- \\\n")
 		}
 		runScriptContent.WriteString(`python3 src/main.py
@@ -503,7 +431,7 @@ DISCORD_GUILD=%s
 			fmt.Printf("Error writing to run.sh file: %v\n", err)
 			return
 		}
-		err = os.Chmod(rootDir+"run.sh", 0755)
+		err = os.Chmod(filepath.Join(rootDir, "run.sh"), 0755)
 		if err != nil {
 			fmt.Printf("Error setting permissions for run.sh file: %v\n", err)
 			return
@@ -515,22 +443,14 @@ DISCORD_GUILD=%s
 		return
 	}
 
-	for _, dir := range directories {
-		err := os.MkdirAll(rootDir+dir, os.ModePerm)
-		if err != nil {
-			fmt.Printf("Error creating directory %s: %v\n", dir, err)
-			return
-		}
-	}
-
-	if mainOpt, err := CreateFileOption(rootDir + "src/main.py"); err == nil && mainOpt {
-		mainFile, err := os.Create(rootDir + "src/main.py")
+	if mainOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "main.py")); err == nil && mainOpt {
+		mainFile, err := os.Create(filepath.Join(rootDir, "src", "main.py"))
 		if err != nil {
 			fmt.Printf("Error creating main.py file: %v\n", err)
 			return
 		}
 		defer mainFile.Close()
-		_, err = mainFile.WriteString(`"""
+		_, err = fmt.Fprintf(mainFile, `"""
 Bot Author: %s
 
 %s
@@ -541,18 +461,18 @@ import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 import os
-from cogs import helloWorld
 import json
 
 class Bot(commands.Bot):
     def __init__(self):
         with open('botbox.conf') as f:
             config = json.load(f)
-
         self.name =  config['bot']['name']
+        self.environments = os.getenv('ENVIRONMENTS', 'production,development').split(',')
         intents = discord.Intents.all()
         intents.message_content = True
         super().__init__(command_prefix = config['bot']['command_prefix'], intents=intents, help_command = None)
+        self.guild = discord.Object(id=os.getenv("DISCORD_GUILD", ""))
         self.synced = False
 
     async def syncing(self):
@@ -572,17 +492,24 @@ GUILD = os.getenv('DISCORD_GUILD')
 @bot.event
 async def on_ready():
     print(f"{bot.name} is starting up...")
-    print(f'{bot.user} has connected to Discord!')
-    print(f'Connected to guild: {GUILD}')
-
+    
     with open('botbox.conf', 'r') as f:
         config = json.load(f)
 
     for cog_config in config['cogs']:
+        if 'file' not in cog_config:
+            print("❌ Cog configuration is missing 'file' key.")
+            continue
+        if 'name' not in cog_config:
+            print("❌ Cog configuration is missing 'name' key.")
+            continue
+        if cog_config['env'] not in bot.environments:
+            print(f"❌ Skipping cog {cog_config['name']}: Not in current environments -  {bot.environments}")
+            continue
         cog_file = cog_config['file']
-        
         try:
             await bot.load_extension(f'cogs.{cog_file}')
+            print(f"✅ Loaded cog: {cog_file}")
         except Exception as e:
             print(f"❌ Failed to load cog {cog_file}: {e}")
     
@@ -598,26 +525,26 @@ if __name__ == '__main__':
 
 """
 File generated by BotBox - https://github.com/choice404/botbox
-"""`)
+"""`, values["botAuthor"], values["botName"], values["botDescription"])
 		if err != nil {
 			fmt.Printf("Error writing to main.py file: %v\n", err)
 			return
 		}
-		err = os.Chmod(rootDir+"src/main.py", 0755)
+		err = os.Chmod(filepath.Join(rootDir, "src", "main.py"), 0755)
 		if err != nil {
 			fmt.Printf("Error setting permissions for main.py file: %v\n", err)
 			return
 		}
 	}
 
-	if helloWorldOpt, err := CreateFileOption(rootDir + "src/cogs/helloWorld.py"); err == nil && helloWorldOpt {
-		helloWorldFile, err := os.Create(rootDir + "src/cogs/helloWorld.py")
+	if helloWorldOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "cogs", "helloWorld.py")); err == nil && helloWorldOpt {
+		helloWorldFile, err := os.Create(filepath.Join(rootDir, "src", "cogs", "helloWorld.py"))
 		if err != nil {
 			fmt.Printf("Error creating helloWorld.py file: %v\n", err)
 			return
 		}
 		defer helloWorldFile.Close()
-		_, err = helloWorldFile.WriteString(`"""
+		_, err = fmt.Fprintf(helloWorldFile, `"""
 Bot Author: %s
 
 %s
@@ -630,18 +557,19 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
+
+GUILD_ID = os.getenv('DISCORD_GUILD')
+GUILD = discord.Object(id=GUILD_ID) if GUILD_ID else None
 
 class HelloWorld(commands.Cog):
     def __init__(self, bot) -> None:
         self.bot = bot
-        print("HelloWorld cog loaded")
 
     @app_commands.command(name="hello", description="Bot responds with world")
-    @app_commands.describe(
-        hello="Bot responds with "world"" when the user types /hello"
-    )
+    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
     async def hello(self, interaction: discord.Interaction) -> None:
         """
         Bot responds with "world" when the user types "/hello"
@@ -664,23 +592,23 @@ async def setup(bot):
 
 """
 File generated by BotBox - https://github.com/choice404/botbox
-"""`)
+"""`, values["botAuthor"], values["botName"], values["botDescription"])
 
 		if err != nil {
 			fmt.Printf("Error writing to helloWorld.py file: %v\n", err)
 			return
 		}
-		err = os.Chmod(rootDir+"src/cogs/helloWorld.py", 0755)
+		err = os.Chmod(filepath.Join(rootDir, "src", "cogs", "helloWorld.py"), 0755)
 		if err != nil {
 			fmt.Printf("Error setting permissions for helloWorld.py file: %v\n", err)
 			return
 		}
 	}
 
-	if cogsOpt, err := CreateFileOption(rootDir + "src/cogs/cogs.py"); err == nil && cogsOpt {
-		cogsFile, err := os.Create(rootDir + "src/cogs/cogs.py")
+	if cogsOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "cogs", "cogs.py")); err == nil && cogsOpt {
+		cogsFile, err := os.Create(filepath.Join(rootDir, "src", "cogs", "cogs.py"))
 		if err != nil {
-			fmt.Printf("Error creating helloWorld.py file: %v\n", err)
+			fmt.Printf("Error creating cogs.py file: %v\n", err)
 			return
 		}
 		defer cogsFile.Close()
@@ -691,10 +619,17 @@ Bot Author: %s
 %s
 """
 
+import discord
+from discord import app_commands
 from discord.ext import commands
+from dotenv import load_dotenv
 import json
+import os
 
-class CogManagement(commands.Cog):
+GUILD_ID = int(os.getenv("GUILD_ID", 0))
+GUILD = discord.Object(id=GUILD_ID) if GUILD_ID else None
+
+class CogManagement(commands.Cog, name="Cog Management"):
     def __init__(self, bot):
         self.bot = bot
 
@@ -702,6 +637,7 @@ class CogManagement(commands.Cog):
     @app_commands.describe(
         cog_name="The name of the cog to reload (without .py cog)"
     )
+    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
     async def reload_cog(self, interaction: discord.Interaction, cog_name: str) -> None:
         """
         Reloads a cog by name.
@@ -730,6 +666,7 @@ class CogManagement(commands.Cog):
         self.bot.syncing()
 
     @app_commands.command(name="reload-all-cogs", description="Reloads all cogs")
+    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
     async def reload_all_cogs(self, interaction: discord.Interaction) -> None:
         """
         Reloads all cogs.
@@ -763,6 +700,7 @@ class CogManagement(commands.Cog):
         self.bot.syncing()
 
     @app_commands.command(name="list-cogs", description="Lists all available cogs")
+    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
     async def list_cogs(self, interaction: discord.Interaction) -> None:
         """
         Lists all available cogs.
@@ -786,6 +724,7 @@ class CogManagement(commands.Cog):
     @app_commands.describe(
         cog_name="The name of the cog to unload (without .py cog)"
     )
+    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
     async def unload_cog(self, interaction: discord.Interaction, cog_name: str) -> None:
         """
         Unloads a cog by name.
@@ -815,6 +754,7 @@ class CogManagement(commands.Cog):
     @app_commands.describe(
         cog_name="The name of the cog to load (without .py cog)"
     )
+    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
     async def load_cog(self, interaction: discord.Interaction, cog_name: str) -> None:
         """
         Loads a cog by name.
@@ -845,21 +785,21 @@ async def setup(bot):
 
 """
 File generated by BotBox - https://github.com/choice404/botbox
-"""`, botAuthor, botName, botDescription)
+"""`, values["botAuthor"], values["botName"], values["botDescription"])
 
 		if err != nil {
 			fmt.Printf("Error writing to cogs.py file: %v\n", err)
 			return
 		}
-		err = os.Chmod(rootDir+"src/cogs/cogs.py", 0755)
+		err = os.Chmod(filepath.Join(rootDir, "src", "cogs", "cogs.py"), 0755)
 		if err != nil {
 			fmt.Printf("Error setting permissions for cogs.py file: %v\n", err)
 			return
 		}
 	}
 
-	if initOpt, err := CreateFileOption(rootDir + "src/cogs/__init__.py"); err == nil && initOpt {
-		_, err := os.Create(rootDir + "src/cogs/__init__.py")
+	if initOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "cogs", "__init__.py")); err == nil && initOpt {
+		_, err := os.Create(filepath.Join(rootDir, "src", "cogs", "__init__.py"))
 		if err != nil {
 			fmt.Printf("Error creating __init__.py file: %v\n", err)
 			return
@@ -867,7 +807,6 @@ File generated by BotBox - https://github.com/choice404/botbox
 	}
 
 	fmt.Println("Project structure created successfully!")
-
 }
 
 func CreateFileOption(filename string) (bool, error) {
@@ -914,6 +853,56 @@ func LoadConfig() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func validateFileName(fileName string) error {
+	if fileExists(fileName) {
+		return fmt.Errorf("file with name '%s' already exists", fileName)
+	}
+	if fileName == "" {
+		return fmt.Errorf("filename cannot be empty")
+	}
+	if strings.Contains(fileName, " ") {
+		return fmt.Errorf("filename cannot contain spaces")
+	}
+	if strings.Contains(fileName, ".") || strings.Contains(fileName, "/") || strings.Contains(fileName, "\\") {
+		return fmt.Errorf("filename cannot contain '.' or '/' or '\\'")
+	}
+	if strings.Contains(fileName, "-") || strings.Contains(fileName, ":") || strings.Contains(fileName, "*") || strings.Contains(fileName, "?") || strings.Contains(fileName, "\"") {
+		return fmt.Errorf("filename cannot contain '-', ':', '*', '?', or '\"'")
+	}
+	return nil
+}
+
+func fileExists(fileName string) bool {
+	rootDir, err := FindBotConf()
+	filePath := filepath.Join(rootDir, "src", "cogs", fileName+".py")
+	_, err = os.Stat(filePath)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	return false
+}
+
+func commandExists(commandName string, commandList []CommandInfo) bool {
+	for _, cmd := range commandList {
+		if cmd.Name == commandName {
+			return true
+		}
+	}
+	return false
+}
+
+func argExists(argName string, args []ArgInfo) bool {
+	for _, arg := range args {
+		if arg.Name == argName {
+			return true
+		}
+	}
+	return false
 }
 
 /*

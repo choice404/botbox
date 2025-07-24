@@ -1,5 +1,15 @@
 <div align="center">
-  <h1>🤖 Bot Box 🤖</h1>
+  <img
+    src="./readme_assets/botBoxTitle.png"
+    height=100
+  />
+</div>
+<div align="center">
+  <img
+    src="./readme_assets/botBox.png"
+    width=400
+    height=400
+  />
   <p>Forget the boring parts. Make building bots fun!</p>
   <p>A powerful CLI tool to scaffold, configure, and manage your Discord bot projects quickly and efficiently.</p>
 </div>

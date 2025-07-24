@@ -3,43 +3,11 @@ Copyright © 2025 Austin Choi austinch20@protonmail.com
 See end of file for extended copyright information
 */
 
-package cmd
+package utils
 
-type BotConfig struct {
-	Name          string `json:"name"`
-	CommandPrefix string `json:"command_prefix"`
-	Author        string `json:"author"`
-	Description   string `json:"description"`
-}
-
-type CogConfig struct {
-	Name           string   `json:"name"`
-	File           string   `json:"file"`
-	SlashCommands  []string `json:"slash_commands"`
-	PrefixCommands []string `json:"prefix_commands"`
-}
-
-type Config struct {
-	BotInfo BotConfig   `json:"bot"`
-	Cogs    []CogConfig `json:"cogs"`
-}
-
-type CommandInfo struct {
-	Name        string
-	Description string
-	Args        []ArgInfo
-	ReturnType  string
-}
-
-type ArgInfo struct {
-	Name        string
-	Type        string
-	Description string
-}
-
-type LicenseResponse struct {
-	Body string `json:"body"`
-}
+var (
+	LicenseText string
+)
 
 /*
 Copyright © 2025 Austin "Choice404" Choi
