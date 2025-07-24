@@ -82,7 +82,7 @@ func configInitCallback(modelValues map[string]*string, allFormsModels []map[str
 				return
 			}
 		} else {
-			cogConfigs = "[]" // Empty JSON array
+			cogConfigs = "[]"
 		}
 		modelValues["cogs"] = &cogConfigs
 	}
