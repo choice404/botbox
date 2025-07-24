@@ -415,7 +415,7 @@ func (m Model) getValues() map[string]string {
 }
 
 func CupSleeve(cup tea.Model) {
-	_, err := tea.NewProgram(cup).Run()
+	_, err := tea.NewProgram(cup, tea.WithAltScreen()).Run()
 
 	if err != nil {
 		fmt.Println("Error:", err)

@@ -205,6 +205,7 @@ Example `botbox.conf` structure:
 
 ## 📜 Version History
 
+-   **2.4.1**: Updated the cli to use the alt screen buffer through Bubble Tea
 -   **2.4.0**: Wrapped all of the Huh forms in Tea for more complex functionality and smoother UX. Updated configuration to be more detailed and added more functionality for development.
 -   **2.3.2**: Updated the add command so that the confirmation for command information is displayed properly
 -   **2.3.1**: Fixed up some small stuff in the file generation here and there, version numberring, etc.
