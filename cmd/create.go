@@ -56,51 +56,45 @@ var createCmd = &cobra.Command{
 			}
 		}
 		model := utils.CreateModel(createProjectCallback)
-		utils.CupSleeve(&model)
+		utils.CupSleeve(model)
 	},
 }
 
-func createProjectCallback(values map[string]string) {
-	rootDir := values["botName"]
+func createProjectCallback(model *utils.Model) []error {
+	var errors []error
+	values := model.ModelValues
+	rootDir := values.Map["botName"]
 
-	if !filepath.IsAbs(rootDir) {
+	if !filepath.IsAbs(*rootDir) {
 		cwd, err := os.Getwd()
 		if err != nil {
-			fmt.Printf("Error getting current directory: %v\n", err)
-			return
+			errors = append(errors, fmt.Errorf("error getting current directory: %w", err))
+			return errors
 		}
-		rootDir = filepath.Join(cwd, rootDir)
+		*rootDir = filepath.Join(cwd, *rootDir)
 	}
 
-	if _, err := os.Stat(rootDir); err == nil && !os.IsNotExist(err) {
-		fmt.Printf("Directory %s already exists. Please choose a different name.\n", rootDir)
-		return
+	if _, err := os.Stat(*rootDir); err == nil && !os.IsNotExist(err) {
+		errors = append(errors, fmt.Errorf("directory already exists: %s", *rootDir))
+		return errors
 	} else if os.IsNotExist(err) {
-		err = os.MkdirAll(rootDir, os.ModePerm)
+		err = os.MkdirAll(*rootDir, os.ModePerm)
 		if err != nil {
-			fmt.Printf("Error creating directory %s: %v\n", rootDir, err)
-			return
+			errors = append(errors, fmt.Errorf("error creating directory: %w", err))
+			return errors
 		}
 	} else {
-		fmt.Printf("Error checking directory %s: %v\n", rootDir, err)
-		return
+		errors = append(errors, fmt.Errorf("error checking directory %s: %w", *rootDir, err))
+		return errors
 	}
 
-	utils.CreateProject(rootDir, values)
+	utils.CreateProject(*rootDir, values)
+
+	return nil
 }
 
 func init() {
 	rootCmd.AddCommand(createCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// createCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// createCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 /*

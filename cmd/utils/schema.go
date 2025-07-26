@@ -10,6 +10,44 @@ import (
 	"fmt"
 )
 
+type GlobalConfig struct {
+	CLI      GlobalCLI      `json:"cli" mapstructure:"cli"`
+	User     GlobalUser     `json:"user" mapstructure:"user"`
+	Display  GlobalDisplay  `json:"display" mapstructure:"display"`
+	Defaults GlobalDefaults `json:"defaults" mapstructure:"defaults"`
+	Dev      GlobalDev      `json:"dev" mapstructure:"dev"`
+}
+
+type GlobalCLI struct {
+	Version      string `json:"version" mapstructure:"version"`
+	CheckUpdates bool   `json:"check_updates" mapstructure:"check_updates"`
+	AutoUpdate   bool   `json:"auto_update" mapstructure:"auto_update"`
+}
+
+type GlobalUser struct {
+	DefaultUser    string `json:"default_user" mapstructure:"default_user"`
+	GithubUsername string `json:"github_username" mapstructure:"github_username"`
+}
+
+type GlobalDisplay struct {
+	ScrollEnabled bool   `json:"scroll_enabled" mapstructure:"scroll_enabled"`
+	ColorScheme   string `json:"color_scheme" mapstructure:"color_scheme"`
+}
+
+type GlobalDefaults struct {
+	CommandPrefix string `json:"command_prefix" mapstructure:"command_prefix"`
+	PythonVersion string `json:"python_version" mapstructure:"python_version"`
+	AutoGitInit   bool   `json:"auto_git_init" mapstructure:"auto_git_init"`
+}
+
+type GlobalDev struct {
+	Editor string `json:"editor" mapstructure:"editor"`
+}
+
+type BotBoxConfig struct {
+	Version string `json:"version"`
+}
+
 type BotConfig struct {
 	Name          string `json:"name"`
 	CommandPrefix string `json:"command_prefix"`
@@ -60,8 +98,9 @@ func (c *CogConfig) ToJSON() (string, error) {
 }
 
 type Config struct {
-	BotInfo BotConfig   `json:"bot"`
-	Cogs    []CogConfig `json:"cogs"`
+	BotBox  BotBoxConfig `json:"botbox"`
+	BotInfo BotConfig    `json:"bot"`
+	Cogs    []CogConfig  `json:"cogs"`
 }
 
 type CommandInfo struct {
@@ -132,6 +171,55 @@ func JSONToArgInfoSlice(jsonString string) ([]ArgInfo, error) {
 
 type LicenseResponse struct {
 	Body string `json:"body"`
+}
+
+type ParsedCogInfo struct {
+	FileName       string
+	CogName        string
+	Author         string
+	ProjectName    string
+	Description    string
+	SlashCommands  []CommandInfo
+	PrefixCommands []CommandInfo
+}
+
+type SyncResult struct {
+	UpdatedCogs  []string
+	AddedCogs    []string
+	RemovedCogs  []string
+	Errors       []string
+	HeaderIssues []string
+}
+
+type GitHubRelease struct {
+	TagName string `json:"tag_name"`
+	Name    string `json:"name"`
+	HTMLURL string `json:"html_url"`
+}
+
+type LegacyConfig struct {
+	BotBox  *BotBoxConfig     `json:"botbox,omitempty"`
+	BotInfo BotConfig         `json:"bot"`
+	Cogs    []LegacyCogConfig `json:"cogs"`
+}
+
+// LegacyCogConfig represents the old cog format with string arrays instead of CommandInfo
+type LegacyCogConfig struct {
+	Name           string   `json:"name"`
+	Env            string   `json:"env"`
+	File           string   `json:"file"`
+	SlashCommands  []string `json:"slash_commands"`
+	PrefixCommands []string `json:"prefix_commands"`
+}
+
+type UpgradeResult struct {
+	Success         bool
+	AlreadyUpgraded bool
+	Message         string
+	UpgradedCogs    []string
+	Errors          []string
+	BackupCreated   bool
+	BackupPath      string
 }
 
 /*

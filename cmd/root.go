@@ -6,9 +6,15 @@ See end of file for extended copyright information
 package cmd
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/choice404/botbox/v2/cmd/utils"
 	"github.com/spf13/cobra"
+)
+
+var (
+	GlobalConfig *utils.GlobalConfig
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -25,32 +31,80 @@ Discord bot projects. It includes a cog-based architecture, ` +
 		"`.env`" + ` management, and built-in utilities for automating
 bot configuration and extension development.
 `,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if cmd.Name() != "update" {
+			checkForUpdatesIfEnabled()
+		}
+	},
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
-	Version: "2.4.1",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
+func Execute(version string) {
+	rootCmd.Version = version
+	utils.SetVersion(rootCmd.Version)
 	rootCmd.SetVersionTemplate(`{{printf "%s\n" .Version}}`)
+
+	if err := utils.SyncGlobalConfigVersion(); err != nil {
+		fmt.Printf("⚠️  Warning: failed to sync version: %v\n", err)
+	}
+
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
 	}
 }
 
+func checkForUpdatesIfEnabled() {
+	if !utils.ShouldCheckForUpdates() {
+		return
+	}
+
+	latest, hasUpdate, err := utils.CheckForUpdates()
+	if err != nil {
+		return
+	}
+
+	if hasUpdate {
+		fmt.Printf("📦 Update available: %s → %s\n", utils.Version, latest.TagName)
+		fmt.Printf("Run 'botbox update' to update, or 'botbox config set -g cli.check_updates false' to disable notifications.\n\n")
+
+		if utils.ShouldAutoUpdate() {
+			fmt.Println("🔄 Auto-update is enabled, updating now...")
+			if err := utils.UpdateBotBox(latest.TagName); err != nil {
+				fmt.Printf("❌ Auto-update failed: %v\n", err)
+				fmt.Println("Please run 'botbox update' to update.")
+				fmt.Println("If you want to disable auto-updates, run 'botbox config set -g cli.auto_update false'.")
+			} else {
+				fmt.Println("✅ Auto-update completed! Please restart your terminal.")
+			}
+		}
+	}
+}
+
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
+	exists, err := utils.GlobalConfigExists()
+	if err != nil {
+		fmt.Printf("Error checking config: %v\n", err)
+		os.Exit(1)
+	}
 
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.botbox.yaml)")
+	if !exists {
+		fmt.Println("Config file does not exist. Creating...")
+		if err := utils.CreateGlobalConfig(); err != nil {
+			fmt.Printf("Error creating config: %v\n", err)
+			os.Exit(1)
+		}
+	}
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	// rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	GlobalConfig, err = utils.LoadGlobalConfig()
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 /*

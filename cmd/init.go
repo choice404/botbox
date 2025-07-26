@@ -31,12 +31,16 @@ var initCmd = &cobra.Command{
 `,
 	Run: func(cmd *cobra.Command, args []string) {
 		model := utils.CreateModel(CreateProjectInitCallback)
-		utils.CupSleeve(&model)
+		utils.CupSleeve(model)
 	},
 }
 
-func CreateProjectInitCallback(values map[string]string) {
+func CreateProjectInitCallback(model *utils.Model) []error {
+	values := model.ModelValues
+	// TODO: Update so the CreateProject function does the overwrite form using the custom Tea/Huh manager.
+	// Or maybe not after some testing, still gonna figure it out a bit
 	utils.CreateProject("./", values)
+	return nil
 }
 
 func init() {

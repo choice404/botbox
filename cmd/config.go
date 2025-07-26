@@ -10,95 +10,205 @@ import (
 
 	"github.com/choice404/botbox/v2/cmd/utils"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
-	configName        bool
-	configDir         bool
-	configAuthor      bool
-	configDescription bool
-	configPrefix      bool
-	configCogs        bool
-	configIsOptional  bool
+	configIsOptional bool
+	allConfigs       bool
+	configArgs       []string
 
 	configCmd = &cobra.Command{
-		Use:   "config",
-		Short: "Get config for the project",
-		Long: `Create different types of files for the discord bot.
-Main files
-Cogs
-Config`,
+		Use:   "config [sections...]",
+		Short: "Disoplay configuration",
+		Long:  `Display local project configuration or global BotBox CLI configuration`,
 		Run: func(cmd *cobra.Command, args []string) {
-
-			if configName || configDir || configAuthor || configDescription || configPrefix || configCogs {
-				configIsOptional = true
+			var configModel utils.Model
+			configArgs = args
+			if len(args) == 0 || args[0] == "all" {
+				allConfigs = true
 			} else {
-				configIsOptional = false
+				allConfigs = false
 			}
 
-			_, err := utils.FindBotConf()
-			if err != nil {
-				fmt.Println("Current directory is not in a botbox project.")
-				return
+			globalFlag, _ := cmd.Flags().GetBool("global")
+			if globalFlag {
+				configModel = utils.GlobalConfigModel(configCallback, globalConfigInitCallback)
+			} else {
+				_, err := utils.FindBotConf()
+				if err != nil {
+					fmt.Println("Current directory is not in a botbox project.")
+					return
+				}
+				configModel = utils.LocalConfigModel(configCallback, localConfigInitCallback)
 			}
-
-			model := utils.ConfigModel(configCallback, configInitCallback)
-
-			utils.CupSleeve(&model)
+			utils.CupSleeve(configModel)
 		},
 	}
 )
 
-func configInitCallback(modelValues map[string]*string, allFormsModels []map[string]*string) {
+func localConfigInitCallback(model *utils.Model, allFormsModels []utils.Values) {
+	var errors []error
+	modelValues := model.ModelValues
 
 	config, err := utils.LoadConfig()
-	rootDir, err := utils.FindBotConf()
 	if err != nil {
-		fmt.Println("Error loading configuration:", err)
+		errors = append(errors, fmt.Errorf("error finding root directory: %w", err))
+		model.HandleError(errors)
 		return
 	}
-
-	if configName || !configIsOptional {
-		modelValues["botName"] = &config.BotInfo.Name
-	}
-	if configDir || !configIsOptional {
-		modelValues["rootDir"] = &rootDir
-	}
-	if configAuthor || !configIsOptional {
-		modelValues["botAuthor"] = &config.BotInfo.Author
-	}
-	if configDescription || !configIsOptional {
-		modelValues["botDescription"] = &config.BotInfo.Description
-	}
-	if configPrefix || !configIsOptional {
-		modelValues["botPrefix"] = &config.BotInfo.CommandPrefix
-	}
-	if configCogs || !configIsOptional {
+	if allConfigs {
+		modelValues.Map["name"] = &config.BotInfo.Name
+		modelValues.Map["author"] = &config.BotInfo.Author
+		modelValues.Map["description"] = &config.BotInfo.Description
+		modelValues.Map["prefix"] = &config.BotInfo.CommandPrefix
 		var cogConfigs string
 		if len(config.Cogs) > 0 {
 			cogConfigs, err = utils.CogConfigSliceToJSON(config.Cogs)
 			if err != nil {
-				fmt.Println("Error converting cogs to JSON:", err)
+				errors = append(errors, fmt.Errorf("error converting cogs to JSON: %w", err))
+				model.HandleError(errors)
 				return
 			}
 		} else {
 			cogConfigs = "[]"
 		}
-		modelValues["cogs"] = &cogConfigs
+		modelValues.Map["cogs"] = &cogConfigs
+	} else {
+		var invalidArgs []string
+		for _, arg := range configArgs {
+			switch arg {
+			case "name":
+				modelValues.Map["name"] = &config.BotInfo.Name
+			case "author":
+				modelValues.Map["author"] = &config.BotInfo.Author
+			case "description":
+				modelValues.Map["description"] = &config.BotInfo.Description
+			case "prefix":
+				modelValues.Map["prefix"] = &config.BotInfo.CommandPrefix
+			case "cogs":
+				var cogConfigs string
+				if len(config.Cogs) > 0 {
+					cogConfigs, err = utils.CogConfigSliceToJSON(config.Cogs)
+					if err != nil {
+						errors = append(errors, fmt.Errorf("error converting cogs to JSON: %w", err))
+						model.HandleError(errors)
+						return
+					}
+				} else {
+					cogConfigs = "[]"
+				}
+				modelValues.Map["cogs"] = &cogConfigs
+			default:
+				invalidArgs = append(invalidArgs, arg)
+			}
+		}
+		if len(invalidArgs) > 0 {
+			errors = append(errors, fmt.Errorf("invalid configuration sectins: %v", invalidArgs))
+			model.HandleError(errors)
+			return
+		}
 	}
 }
 
-func configCallback(values map[string]string) {
+func globalConfigInitCallback(model *utils.Model, allFormsModels []utils.Values) {
+	var errors []error
+	modelValues := model.ModelValues
+	if allConfigs {
+		*modelValues.Map["version"] = viper.GetString("cli.version")
+		if viper.GetBool("cli.check_updates") {
+			*modelValues.Map["check_updates"] = "true"
+		} else {
+			*modelValues.Map["check_updates"] = "false"
+		}
+		if viper.GetBool("cli.auto_update") {
+			*modelValues.Map["auto_update"] = "true"
+		} else {
+			*modelValues.Map["auto_update"] = "false"
+		}
+		*modelValues.Map["default_user"] = viper.GetString("user.default_user")
+		*modelValues.Map["github_username"] = viper.GetString("user.github_username")
+		if viper.GetBool("display.scroll_enabled") {
+			*modelValues.Map["scroll_enabled"] = "true"
+		} else {
+			*modelValues.Map["scroll_enabled"] = "false"
+		}
+		*modelValues.Map["color_scheme"] = viper.GetString("display.color_scheme")
+		*modelValues.Map["default_command_prefix"] = viper.GetString("defaults.command_prefix")
+		*modelValues.Map["default_python_version"] = viper.GetString("defaults.python_version")
+		if viper.GetBool("defaults.auto_git_init") {
+			*modelValues.Map["auto_git_init"] = "true"
+		} else {
+			*modelValues.Map["auto_git_init"] = "false"
+		}
+		*modelValues.Map["editor"] = viper.GetString("dev.editor")
+	} else {
+		var invalidArgs []string
+		for _, arg := range configArgs {
+			switch arg {
+			case "version":
+				*modelValues.Map["version"] = viper.GetString("cli.version")
+			case "check-updates":
+				if viper.GetBool("cli.check_updates") {
+					*modelValues.Map["check_updates"] = "true"
+				} else {
+					*modelValues.Map["check_updates"] = "false"
+				}
+			case "auto-update":
+				if viper.GetBool("cli.auto_update") {
+					*modelValues.Map["auto_update"] = "true"
+				} else {
+					*modelValues.Map["auto_update"] = "false"
+				}
+			case "user":
+				*modelValues.Map["default_user"] = viper.GetString("user.default_user")
+			case "github":
+				*modelValues.Map["github_username"] = viper.GetString("user.github_username")
+			case "scroll":
+				if viper.GetBool("display.scroll_enabled") {
+					*modelValues.Map["scroll_enabled"] = "true"
+				} else {
+					*modelValues.Map["scroll_enabled"] = "false"
+				}
+			case "colorscheme":
+				*modelValues.Map["color_scheme"] = viper.GetString("display.color_scheme")
+			case "command-prefix":
+				*modelValues.Map["default_command_prefix"] = viper.GetString("defaults.command_prefix")
+			case "git":
+				if viper.GetBool("defaults.auto_git_init") {
+					*modelValues.Map["auto_git_init"] = "true"
+				} else {
+					*modelValues.Map["auto_git_init"] = "false"
+				}
+			case "python":
+				*modelValues.Map["default_python_version"] = viper.GetString("defaults.python_version")
+			case "editor":
+				*modelValues.Map["editor"] = viper.GetString("dev.editor")
+			default:
+				invalidArgs = append(invalidArgs, arg)
+			}
+		}
+		if len(invalidArgs) > 0 {
+			errors = append(errors, fmt.Errorf("invalid configuration sectins: %v", invalidArgs))
+			model.HandleError(errors)
+			return
+		}
+	}
 }
+
+func configCallback(model *utils.Model) []error { return nil }
 
 func init() {
 	rootCmd.AddCommand(configCmd)
-	configCmd.Flags().BoolVarP(&configName, "name", "n", false, "Display the bot name")
-	configCmd.Flags().BoolVarP(&configDir, "dir", "d", false, "Display the bot directory")
-	configCmd.Flags().BoolVarP(&configAuthor, "author", "a", false, "Display the bot author")
-	configCmd.Flags().BoolVarP(&configDescription, "description", "D", false, "Display the bot description")
-	configCmd.Flags().BoolVarP(&configPrefix, "prefix", "p", false, "Display the command prefix")
-	configCmd.Flags().BoolVarP(&configCogs, "cogs", "c", false, "Display the cogs")
+
+	configCmd.Flags().BoolP("global", "g", false, "Show global CLI configuration")
+	configCmd.Flags().Bool("local", false, "Show local project configuration (default)")
+
+	configCmd.Flags().StringP("format", "f", "default", "Output format (default, json, yaml)")
+	configCmd.Flags().BoolP("keys-only", "k", false, "Show only configuration keys")
+
+	configCmd.MarkFlagsMutuallyExclusive("global", "local")
+
 	configCmd.Flags().BoolP("help", "h", false, "Help for config")
 }
 
