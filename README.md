@@ -419,6 +419,7 @@ This will:
 
 ## 📜 Version History
 
+-   **2.5.1** Made the final view in the custom tea/huh form manager scrollable (This is enabled regardless of scroll_enabled status in the global config for long content)
 -   **2.5.0**: Added global CLI configuration system, comprehensive config management commands (`botbox config set/get/list` with `-l/-g` flags), automatic update checking and updating capabilities, project configuration upgrade system (`botbox project upgrade`), and improved configuration synchronization.
 -   **2.4.1**: Updated the cli to use the alt screen buffer through Bubble Tea
 -   **2.4.0**: Wrapped all of the Huh forms in Tea for more complex functionality and smoother UX. Updated configuration to be more detailed and added more functionality for development.

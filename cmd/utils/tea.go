@@ -181,6 +181,59 @@ func (m *Model) resetViewport() {
 	m.viewportOffset = 0
 }
 
+func (m *Model) getMaxViewportOffset() int {
+	if m.state != stateDone {
+		return 0
+	}
+
+	var content string
+
+	if m.Error != nil {
+		var b strings.Builder
+		b.WriteString("Errors:\n\n")
+		for _, err := range m.Error {
+			if b.Len() > 0 {
+				b.WriteString("\n")
+			}
+			b.WriteString(err.Error())
+		}
+		content = b.String()
+	} else if m.displayCallback == nil {
+		var b strings.Builder
+		var values Values
+		if m.displayKeys == nil || len(m.displayKeys) == 0 {
+			values = m.getValues()
+		} else {
+			values = m.GetValuesByKeys(m.displayKeys)
+		}
+
+		for key, value := range values.Map {
+			if key == "" && *value == "" {
+				continue
+			}
+			if key != "" {
+				b.WriteString(fmt.Sprintf("%s: %s\n", key, *value))
+			} else {
+				b.WriteString(*value + "\n")
+			}
+		}
+		content = b.String()
+	} else {
+		content = m.displayCallback()
+		if content == "" {
+			content = "No values to display."
+		}
+	}
+
+	lines := strings.Split(content, "\n")
+	availableContentHeight := max(1, m.viewportHeight-6)
+
+	if len(lines) <= availableContentHeight {
+		return 0
+	}
+	return len(lines) - availableContentHeight
+}
+
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -191,20 +244,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Interrupt
 
-			// NOTE: Uncomment to enable scrolling functionality
-		// case "up":
-		// 	if m.state != stateDone && m.viewportOffset > 0 {
-		// 		m.viewportOffset--
-		// 		return m, nil
-		// 	}
-		// case "down":
-		// 	if m.state != stateDone {
-		// 		maxOffset := m.getMaxViewportOffset()
-		// 		if m.viewportOffset < maxOffset {
-		// 			m.viewportOffset++
-		// 			return m, nil
-		// 		}
-		// 	}
+		case "up":
+			if m.state == stateDone && m.viewportOffset > 0 {
+				m.viewportOffset--
+				return m, nil
+			}
+		case "down":
+			if m.state == stateDone {
+				maxOffset := m.getMaxViewportOffset()
+				if m.viewportOffset < maxOffset {
+					m.viewportOffset++
+					return m, nil
+				}
+			}
 
 		case "esc":
 			return m, tea.Quit
@@ -348,7 +400,8 @@ func (m Model) View() string {
 	case huh.StateCompleted:
 		versionMessage := s.Highlight.Render(fmt.Sprintf("BotBox Version: %s", Version))
 		if m.forms[m.currentFormPtr].ShowStatus || m.currentFormPtr >= len(m.forms)-1 {
-			var message string
+			var content string
+			var header string
 
 			if m.Error != nil {
 				var b strings.Builder
@@ -359,10 +412,8 @@ func (m Model) View() string {
 					}
 					b.WriteString(err.Error())
 				}
-
-				header := m.appBoundaryView(m.title)
-				statusBox := s.Status.Margin(0, 0).Padding(1, 2).Width(80).Render(b.String())
-				message = header + "\n" + statusBox
+				content = b.String()
+				header = m.appBoundaryView(m.title)
 			} else if m.displayCallback == nil {
 				var b strings.Builder
 				var values Values
@@ -385,41 +436,65 @@ func (m Model) View() string {
 						b.WriteString(value + "\n")
 					}
 				}
-
-				header := m.appBoundaryView(m.title)
-				statusBox := s.Status.Margin(0, 0).Padding(1, 2).Width(80).Render(b.String())
-				message = header + "\n" + statusBox
+				content = b.String()
+				header = m.appBoundaryView(m.title)
 			} else {
-				displayContent := m.displayCallback()
-				header := m.appBoundaryView(m.title)
-				if displayContent == "" {
-					displayContent = s.Highlight.Render("No values to display.")
+				content = m.displayCallback()
+				header = m.appBoundaryView(m.title)
+				if content == "" {
+					content = s.Highlight.Render("No values to display.")
 				}
+			}
 
-				statusBox := s.Status.Margin(0, 0).Padding(1, 2).Width(80).Render(displayContent)
-				message = header + "\n" + statusBox
+			lines := strings.Split(content, "\n")
+			scrollableContent := content
+
+			availableContentHeight := max(1, m.viewportHeight-6)
+
+			if len(lines) > availableContentHeight {
+				if m.viewportOffset > 0 {
+					startLine := min(m.viewportOffset, len(lines)-1)
+					endLine := min(startLine+availableContentHeight, len(lines))
+					if startLine < len(lines) && endLine > startLine {
+						scrollableContent = strings.Join(lines[startLine:endLine], "\n")
+					}
+				} else {
+					scrollableContent = strings.Join(lines[:availableContentHeight], "\n")
+				}
+			}
+
+			statusBox := s.Status.Margin(0, 0).Padding(1, 2).Width(80).Render(scrollableContent)
+
+			scrollIndicator := ""
+			maxOffset := m.getMaxViewportOffset()
+			if maxOffset > 0 {
+				totalLines := len(lines)
+				currentEndLine := min(m.viewportOffset+availableContentHeight, totalLines)
+				scrollIndicator = s.Help.Render(fmt.Sprintf("↑/↓ to scroll (line %d-%d of %d)",
+					m.viewportOffset+1,
+					currentEndLine,
+					totalLines))
 			}
 
 			confirmPrompt := s.Highlight.Render("Press Enter to submit, or Esc/Q to cancel.")
-			return s.Base.Render(message + "\n\n" + confirmPrompt + "\n\n" + versionMessage + "\n\n")
+
+			message := header + "\n" + statusBox
+			if scrollIndicator != "" {
+				message += "\n" + scrollIndicator
+			}
+			message += "\n\n" + confirmPrompt
+
+			result := s.Base.Render(message + "\n")
+			result += "\n" + versionMessage + "\n\n"
+
+			return result
 		}
+
 		header := m.appBoundaryView(m.title)
 		message := s.Highlight.Render("Press Enter to continue.")
 		return s.Base.Render(header + "\n" + message + "\n\n" + versionMessage + "\n\n")
 	default:
 		v := strings.TrimSuffix(m.currentForm.View(), "\n\n")
-
-		lines := strings.Split(v, "\n")
-		if m.viewportOffset > 0 && len(lines) > m.viewportHeight {
-			startLine := m.viewportOffset
-			endLine := min(m.viewportOffset+m.viewportHeight, len(lines))
-			if startLine < len(lines) {
-				v = strings.Join(lines[startLine:endLine], "\n")
-			}
-		} else if len(lines) > m.viewportHeight {
-			v = strings.Join(lines[:m.viewportHeight], "\n")
-		}
-
 		form := m.lg.NewStyle().Margin(1, 0).Render(v)
 
 		errors := m.currentForm.Errors()
@@ -435,21 +510,8 @@ func (m Model) View() string {
 			footer = m.appErrorBoundaryView("")
 		}
 
-		// NOTE: Uncomment to enable scrolling functionality
-		// scrollIndicator := ""
-		// maxOffset := m.getMaxViewportOffset()
-		// if maxOffset > 0 {
-		// 	scrollIndicator = s.Help.Render(fmt.Sprintf("↑/↓ to scroll (line %d-%d of %d)",
-		// 		m.viewportOffset+1,
-		// 		int(math.Min(float64(m.viewportOffset+m.viewportHeight), float64(len(strings.Split(strings.TrimSuffix(m.currentForm.View(), "\n\n"), "\n"))))),
-		// 		len(strings.Split(strings.TrimSuffix(m.currentForm.View(), "\n\n"), "\n"))))
-		// }
-
 		return s.Base.Render(header + "\n" + body + "\n\n" +
-			footer + "\n" +
-			// NOTE: Uncomment to enable scrolling functionality
-			// scrollIndicator +
-			"\n\n" + s.Highlight.Render("BotBox Version: "+Version) + "\n\n")
+			footer + "\n" + "\n\n" + s.Highlight.Render("BotBox Version: "+Version) + "\n\n")
 	}
 }
 
