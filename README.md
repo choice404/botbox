@@ -49,6 +49,10 @@ Built with **Go**, [`Cobra`](https://github.com/spf13/cobra), [`Bubble Tea`](htt
 -   **Automated Cog Generation**: Generate new cogs with predefined commands and arguments effortlessly.
 -   **Project Initialization**: Quick setup with `.env` and `botbox.conf` files.
 -   **Dynamic cog maintenance**: Used `botbox.conf` to dynamically load cogs and provide an interface for users to load, reload, and unload cogs as needed.
+-   **Global Configuration Management**: Centralized settings stored in `$HOME/.config/botbox/config.json` for user preferences, update settings, and defaults.
+-   **Automatic Updates**: Built-in update checking and automatic updating capabilities to keep your CLI tool current.
+-   **Dual Configuration System**: Manage both global CLI settings and local project configurations with intuitive commands.
+-   **Project Upgrade System**: Seamlessly upgrade legacy project configurations to the latest schema format.
 -   **Modular Design**: Easily extendable and maintainable structure.
 
 ---
@@ -84,13 +88,17 @@ Once Go is installed, use the following command to install Bot Box:
 go install github.com/choice404/botbox/v2@latest
 ```
 
+Bot Box will automatically create a global configuration file at `$HOME/.config/botbox/config.json` when you first run any command. This file stores your CLI preferences, update settings, and default values.
+
 ---
 
 ## 💡 Usage
 
-Bot Box provides several commands to help you manage your bot project.
+Bot Box provides several commands to help you manage your bot project and CLI configuration.
 
-### Create a new Bot Box project
+### Project Management
+
+#### Create a new Bot Box project
 
 ```sh
 botbox create
@@ -98,7 +106,7 @@ botbox create
 
 This command will prompt you to provide project details (like bot name, prefix, etc.) and then generate a new project with initial files.
 
-### Initialize a Bot Box project in the current directory
+#### Initialize a Bot Box project in the current directory
 
 ```sh
 botbox init
@@ -106,7 +114,7 @@ botbox init
 
 Use this command to set up a new Bot Box project in your current working directory.
 
-### Add a new cog to the current Bot Box project
+#### Add a new cog to the current Bot Box project
 
 ```sh
 botbox add
@@ -123,7 +131,7 @@ You'll be prompted to define:
 
 The new cog will be saved in the `cogs/` directory and automatically registered in `botbox.conf`.
 
-### Remove a cog from the current Bot Box project
+#### Remove a cog from the current Bot Box project
 
 ```sh
 botbox remove
@@ -131,30 +139,175 @@ botbox remove
 
 You'll be prompted to select a cog to remove. This command will also update `botbox.conf` accordingly.
 
-### Display current Bot Box project configuration
+#### Upgrade project configuration
 
 ```sh
-botbox config [flags]
+botbox project upgrade
 ```
 
-This command displays the configuration details of your current Bot Box project as defined in `botbox.conf`.
+Upgrade your `botbox.conf` file to the latest schema format. This command will:
+- Parse your existing configuration file
+- Analyze your cog files to extract detailed command information
+- Create a backup of your original configuration
+- Upgrade to the latest schema while preserving all settings
+
+### Configuration Management
+
+Bot Box now provides comprehensive configuration management for both global CLI settings and local project settings.
+
+#### Display configuration
+
+```sh
+# Display local project configuration (default)
+botbox config
+
+# Display local project configuration (explicit)
+botbox config -l
+
+# Display global CLI configuration
+botbox config -g
+```
+
+#### List all configuration keys and values
+
+```sh
+# List local project configuration (default)
+botbox config list
+
+# List local project configuration (explicit)
+botbox config list -l
+
+# List global CLI configuration
+botbox config list -g
+```
+
+#### Get specific configuration values
+
+```sh
+# Get local project values (default)
+botbox config get bot.name
+botbox config get bot.author
+
+# Get local project values (explicit)
+botbox config get -l bot.description
+
+# Get global CLI values
+botbox config get -g user.default_user
+botbox config get -g cli.check_updates
+```
+
+#### Set configuration values
+
+```sh
+# Set local project values (default)
+botbox config set bot.name "My Awesome Bot"
+botbox config set bot.command_prefix "!"
+
+# Set local project values (explicit)
+botbox config set -l bot.author "John Doe"
+
+# Set global CLI values
+botbox config set -g user.default_user "john_doe"
+botbox config set -g cli.check_updates true
+botbox config set -g cli.auto_update false
+```
+
+#### Synchronize cog configuration
+
+```sh
+botbox config sync
+```
+
+This command synchronizes your `botbox.conf` file with the actual cog files in your project, ensuring consistency between your configuration and code.
+
+### Update Management
+
+#### Update Bot Box
+
+```sh
+botbox update
+```
+
+Manually update Bot Box to the latest version. The CLI can also automatically check for updates and update itself based on your global configuration settings.
 
 ---
 
 ## ⚙️ Configuration
 
-### `botbox.conf`
+Bot Box uses a dual configuration system to manage both global CLI settings and local project settings.
+
+### Global Configuration (`$HOME/.config/botbox/config.json`)
+
+The global configuration file stores CLI-wide settings and user preferences. It's automatically created when you first run any Bot Box command. Key settings include:
+
+- **CLI Settings**: Update checking and auto-update preferences
+- **User Settings**: Default username and GitHub username
+- **Display Settings**: UI preferences like color scheme and scroll behavior
+- **Default Settings**: Default command prefix and auto-git initialization
+- **Development Settings**: Preferred code editor
+
+Example global configuration structure:
+
+```json
+{
+  "cli": {
+    "version": "2.5.0",
+    "check_updates": true,
+    "auto_update": false
+  },
+  "user": {
+    "default_user": "john_doe",
+    "github_username": "johndoe"
+  },
+  "display": {
+    "scroll_enabled": true,
+    "color_scheme": "default"
+  },
+  "defaults": {
+    "command_prefix": "!",
+    "python_version": "3.11",
+    "auto_git_init": true
+  },
+  "dev": {
+    "editor": "code"
+  }
+}
+```
+
+**Available Global Configuration Keys:**
+- `cli.check_updates` - Enable/disable update notifications
+- `cli.auto_update` - Enable/disable automatic updates
+- `user.default_user` - Your default username
+- `user.github_username` - Your GitHub username
+- `display.scroll_enabled` - Enable/disable scrolling in UI
+- `display.color_scheme` - UI color scheme preference
+- `defaults.command_prefix` - Default bot command prefix
+- `defaults.auto_git_init` - Auto-initialize git repositories
+- `dev.editor` - Preferred code editor
+
+**Note:** The `cli.version` and `defaults.python_version` keys are read-only and managed automatically by Bot Box.
+
+### Local Project Configuration (`botbox.conf`)
 
 This is the central configuration file for your Bot Box project, crucial for dynamically loading, reloading, and unloading cogs via `/src/main.py` and `/src/cogs/cogs.py`.
 
 The Bot Box CLI tool automatically keeps `botbox.conf` synchronized with your project. If you choose to add or remove cogs manually (without the CLI tool), you *must* manually update `botbox.conf` or manage cog loading within `/src/main.py` and `/src/cogs/cogs.py`.
 
+**Available Local Configuration Keys:**
+- `bot.name` - Your bot's name
+- `bot.description` - Your bot's description
+- `bot.command_prefix` - Your bot's command prefix
+- `bot.author` - Your name as the bot author
+
 Example `botbox.conf` structure:
 
 ```json
 {
+  "botbox": {
+    "version": "2.5.0"
+  },
   "bot": {
-    "name": "botbox",
+    "name": "My Awesome Bot",
     "command_prefix": "!",
     "author": "Austin \"Choice404\" Choi",
     "description": "A really cool bot!"
@@ -174,7 +327,57 @@ Example `botbox.conf` structure:
       }
     ],
     "prefix_commands": []
-  },
+  }]
+}
+```
+
+### Configuration Schema Upgrades
+
+Bot Box automatically handles configuration schema upgrades. If you have an older project with a legacy `botbox.conf` format, use:
+
+```sh
+botbox project upgrade
+```
+
+This will:
+1. **Backup your original config** - Creates `botbox.conf.backup`
+2. **Parse cog files** - Extracts detailed command information from your Python files
+3. **Upgrade schema** - Converts legacy string arrays to modern CommandInfo objects
+4. **Preserve settings** - Maintains all your existing bot configuration
+5. **Add missing fields** - Ensures compatibility with the latest Bot Box version
+
+**Legacy vs Modern Format:**
+
+*Legacy format (pre-2.5.0):*
+```json
+{
+  "cogs": [{
+    "name": "MyCog",
+    "file": "mycog",
+    "slash_commands": ["command1", "command2"],
+    "prefix_commands": ["old_command"]
+  }]
+}
+```
+
+*Modern format (2.5.0+):*
+```json
+{
+  "cogs": [{
+    "name": "MyCog",
+    "file": "mycog",
+    "slash_commands": [
+      {
+        "Name": "command1",
+        "Type": "slash",
+        "Scope": "guild",
+        "Description": "Command description",
+        "Args": [...],
+        "ReturnType": "None"
+      }
+    ],
+    "prefix_commands": [...]
+  }]
 }
 ```
 
@@ -183,10 +386,16 @@ Example `botbox.conf` structure:
 ## 🐛 Troubleshooting
 
 -   **Missing `botbox.conf`?** Run `botbox init` in your project directory to generate it.
+-   **Missing global config?** The global configuration file will be automatically created when you run any Bot Box command.
+-   **Legacy config format?** Run `botbox project upgrade` to upgrade your configuration to the latest schema.
 -   **Cogs not loading?**
     -   Verify cog names in `botbox.conf` match the actual file names in the `cogs/` directory.
     -   Ensure the cog files exist.
+    -   Run `botbox config sync` to synchronize your configuration with your cog files.
 -   **Token errors?** Make sure your `.env` file is present in the project root and contains `DISCORD_BOT_TOKEN=YOUR_TOKEN_HERE`.
+-   **Update issues?** If automatic updates fail, try running `botbox update` manually.
+-   **Configuration issues?** Use `botbox config list` to view all current settings, or `botbox config list -g` for global settings.
+-   **Panic or crashes?** Ensure you're running the latest version with `botbox update`, and check that your project structure is valid.
 
 ---
 
@@ -195,16 +404,22 @@ Example `botbox.conf` structure:
 -   [x] Expand `botbox.conf` to include:
     -   [x] More details about each command provided via `botbox add`.
     -   [ ] Expected bot responses.
+-   [x] Global configuration management system
+-   [x] Automatic update checking and updating
+-   [x] Project configuration upgrade system
 -   [ ] Add a proper changelog
 -   [ ] New commands:
     -   [ ] `botbox edit` command for modifying existing cogs/commands.
+    -   [ ] `botbox project migrate` for migrating between major versions.
 -   [ ] Advanced dynamic bot building:
     -   [ ] Create cogs containing "blocks" that can be dynamically added and connected for complex functionality.
+-   [ ] Enhanced project templates and scaffolding options.
 
 ---
 
 ## 📜 Version History
 
+-   **2.5.0**: Added global CLI configuration system, comprehensive config management commands (`botbox config set/get/list` with `-l/-g` flags), automatic update checking and updating capabilities, project configuration upgrade system (`botbox project upgrade`), and improved configuration synchronization.
 -   **2.4.1**: Updated the cli to use the alt screen buffer through Bubble Tea
 -   **2.4.0**: Wrapped all of the Huh forms in Tea for more complex functionality and smoother UX. Updated configuration to be more detailed and added more functionality for development.
 -   **2.3.2**: Updated the add command so that the confirmation for command information is displayed properly

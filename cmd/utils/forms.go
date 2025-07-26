@@ -29,49 +29,52 @@ func CreateFormWrapperGenerator() []FormWrapper {
 	}
 
 	wrapper := FormWrapper{
-		Name:       "Create Bot",
-		Form:       createFormGenerator,
-		Values:     values,
+		Name: "Create Bot",
+		Form: createFormGenerator,
+		Values: Values{
+			Map:  values,
+			Name: "createBotValues",
+		},
 		ShowStatus: true,
-		Callback: func(formValues map[string]*string, modelValues map[string]*string, allForms []FormWrapper) {
-			if formValues["botName"] != nil {
-				*modelValues["botName"] = *formValues["botName"]
+		Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+			if formValues.Map["botName"] != nil {
+				*modelValues.Map["botName"] = *formValues.Map["botName"]
 			}
-			if formValues["botDescription"] != nil {
-				*modelValues["botDescription"] = *formValues["botDescription"]
+			if formValues.Map["botDescription"] != nil {
+				*modelValues.Map["botDescription"] = *formValues.Map["botDescription"]
 			}
-			if formValues["botAuthor"] != nil {
-				*modelValues["botAuthor"] = *formValues["botAuthor"]
+			if formValues.Map["botAuthor"] != nil {
+				*modelValues.Map["botAuthor"] = *formValues.Map["botAuthor"]
 			}
-			if formValues["botPrefix"] != nil {
-				*modelValues["botPrefix"] = *formValues["botPrefix"]
+			if formValues.Map["botPrefix"] != nil {
+				*modelValues.Map["botPrefix"] = *formValues.Map["botPrefix"]
 			}
-			if formValues["envChoice"] != nil {
-				*modelValues["envChoice"] = *formValues["envChoice"]
+			if formValues.Map["envChoice"] != nil {
+				*modelValues.Map["envChoice"] = *formValues.Map["envChoice"]
 			}
-			if formValues["botTokenDopplerProject"] != nil {
-				*modelValues["botTokenDopplerProject"] = *formValues["botTokenDopplerProject"]
+			if formValues.Map["botTokenDopplerProject"] != nil {
+				*modelValues.Map["botTokenDopplerProject"] = *formValues.Map["botTokenDopplerProject"]
 			}
-			if formValues["botGuildDopplerEnv"] != nil {
-				*modelValues["botGuildDopplerEnv"] = *formValues["botGuildDopplerEnv"]
+			if formValues.Map["botGuildDopplerEnv"] != nil {
+				*modelValues.Map["botGuildDopplerEnv"] = *formValues.Map["botGuildDopplerEnv"]
 			}
-			if formValues["licenseType"] != nil {
-				*modelValues["licenseType"] = *formValues["licenseType"]
+			if formValues.Map["licenseType"] != nil {
+				*modelValues.Map["licenseType"] = *formValues.Map["licenseType"]
 			}
 		},
 	}
 	return []FormWrapper{wrapper}
 }
 
-func createFormGenerator(values map[string]*string, modelValues map[string]*string) *huh.Form {
+func createFormGenerator(values Values, modelValues Values) *huh.Form {
 	createForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
 				Title("Enter the name of your bot").
 				Prompt("> ").
-				Value(values["botName"]).
+				Value(values.Map["botName"]).
 				Validate(func(s string) error {
-					if *values["botName"] == "" {
+					if *values.Map["botName"] == "" {
 						return fmt.Errorf("Bot name cannot be empty")
 					}
 					if len(s) > 20 {
@@ -92,10 +95,10 @@ func createFormGenerator(values map[string]*string, modelValues map[string]*stri
 
 			huh.NewText().
 				Title("Enter a description of your bot").
-				Value(values["botDescription"]).
+				Value(values.Map["botDescription"]).
 				CharLimit(100).
 				Validate(func(s string) error {
-					if *values["botDescription"] == "" {
+					if *values.Map["botDescription"] == "" {
 						return fmt.Errorf("Description cannot be empty")
 					}
 					return nil
@@ -104,9 +107,9 @@ func createFormGenerator(values map[string]*string, modelValues map[string]*stri
 			huh.NewInput().
 				Title("Enter the author of your bot").
 				Prompt("> ").
-				Value(values["botAuthor"]).
+				Value(values.Map["botAuthor"]).
 				Validate(func(s string) error {
-					if *values["botAuthor"] == "" {
+					if *values.Map["botAuthor"] == "" {
 						return fmt.Errorf("Author name cannot be empty")
 					}
 					return nil
@@ -115,10 +118,10 @@ func createFormGenerator(values map[string]*string, modelValues map[string]*stri
 			huh.NewInput().
 				Title("Enter the command prefix for your bot (default: '!')").
 				Prompt("> ").
-				Value(values["botPrefix"]).
+				Value(values.Map["botPrefix"]).
 				Validate(func(s string) error {
 					if s == "" {
-						*values["botPrefix"] = "!"
+						*values.Map["botPrefix"] = "!"
 						return nil
 					}
 					if len(s) > 1 {
@@ -139,7 +142,7 @@ func createFormGenerator(values map[string]*string, modelValues map[string]*stri
 					huh.NewOption("Create a .env file", "env"),
 					huh.NewOption("Use Doppler", "doppler"),
 				).
-				Value(values["envChoice"]).
+				Value(values.Map["envChoice"]).
 				Validate(func(s string) error {
 					if s != "env" && s != "doppler" {
 						return fmt.Errorf("Please select either 'env' or 'doppler'")
@@ -149,15 +152,15 @@ func createFormGenerator(values map[string]*string, modelValues map[string]*stri
 
 			huh.NewInput().
 				TitleFunc(func() string {
-					if *values["envChoice"] == "env" {
+					if *values.Map["envChoice"] == "env" {
 						return "Enter the bot token"
 					}
 					return "Enter the Doppler project name"
-				}, values["envChoice"]).
+				}, values.Map["envChoice"]).
 				Prompt("> ").
 				EchoMode(huh.EchoModePassword).
 				Validate(func(s string) error {
-					if *values["envChoice"] == "env" {
+					if *values.Map["envChoice"] == "env" {
 						if s == "" {
 							return fmt.Errorf("Token cannot be empty")
 						}
@@ -167,17 +170,17 @@ func createFormGenerator(values map[string]*string, modelValues map[string]*stri
 					}
 					return nil
 				}).
-				Value(values["botTokenDopplerProject"]),
+				Value(values.Map["botTokenDopplerProject"]),
 
 			huh.NewInput().
 				TitleFunc(func() string {
-					if *values["envChoice"] == "env" {
+					if *values.Map["envChoice"] == "env" {
 						return "Enter the bot guild ID"
 					}
 					return "Enter the Doppler environment name"
-				}, values["envChoice"]).
+				}, values.Map["envChoice"]).
 				Prompt("> ").
-				Value(values["botGuildDopplerEnv"]).
+				Value(values.Map["botGuildDopplerEnv"]).
 				Validate(func(s string) error {
 					return nil
 				}),
@@ -193,7 +196,7 @@ func createFormGenerator(values map[string]*string, modelValues map[string]*stri
 					huh.NewOption("Unlicense", "unlicense"),
 					huh.NewOption("No license", "no-license"),
 				).
-				Value(values["licenseType"]).
+				Value(values.Map["licenseType"]).
 				Validate(func(s string) error {
 					if s == "" {
 						return fmt.Errorf("Please select a license type")
@@ -220,16 +223,32 @@ func AddFormWrapperGenerator() []FormWrapper {
 		}
 
 		wrapper := FormWrapper{
-			Name:       "Add File Name",
-			Form:       addFileNameFormGenerator,
-			Values:     values,
+			Name: "Add File Name",
+			Form: addFileNameFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addFileNameValues",
+			},
 			ShowStatus: false,
 			FormGroup:  "filename",
-			Callback: func(formValues map[string]*string, modelValues map[string]*string, allForms []FormWrapper) {
-				if *formValues["filename"] == "" {
-					*formValues["filename"] = "cog.py"
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				if *formValues.Map["filename"] == "" {
+					*formValues.Map["filename"] = "cog.py"
 				}
-				*modelValues["filename"] = *formValues["filename"]
+				*modelValues.Map["filename"] = *formValues.Map["filename"]
+			},
+
+			SkipCondition: func(modelValues Values, allForms []FormWrapper, currentIndex int) bool {
+				if modelValues.Map["filename"] != nil && *modelValues.Map["filename"] != "" {
+					return true
+				}
+				return false
+			},
+			SkipCallback: func(modelValues Values, allForms []FormWrapper, currentIndex int) {
+				if modelValues.Map["filename"] != nil && *modelValues.Map["filename"] != "" {
+					filename := *modelValues.Map["filename"]
+					allForms[currentIndex].Values.Map["filename"] = &filename
+				}
 			},
 		}
 
@@ -240,21 +259,24 @@ func AddFormWrapperGenerator() []FormWrapper {
 			"cmdStartConfirm": new(string),
 		}
 		wrapper := FormWrapper{
-			Name:       "Add Command Start",
-			Form:       addCmdStartFormGenerator,
-			Values:     values,
+			Name: "Add Command Start",
+			Form: addCmdStartFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addCommandStartValues",
+			},
 			ShowStatus: false,
 			FormGroup:  "command",
-			Callback: func(formValues map[string]*string, modelValues map[string]*string, allForms []FormWrapper) {
-				allForms[2].Values["cmdName"] = new(string)
-				allForms[2].Values["cmdType"] = new(string)
-				allForms[2].Values["cmdScope"] = new(string)
-				allForms[2].Values["cmdDescription"] = new(string)
-				allForms[2].Values["cmdReturnType"] = new(string)
-				allForms[4].Values["args"] = new(string)
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				allForms[2].Values.Map["cmdName"] = new(string)
+				allForms[2].Values.Map["cmdType"] = new(string)
+				allForms[2].Values.Map["cmdScope"] = new(string)
+				allForms[2].Values.Map["cmdDescription"] = new(string)
+				allForms[2].Values.Map["cmdReturnType"] = new(string)
+				allForms[4].Values.Map["args"] = new(string)
 			},
-			BranchCallback: func(formValues map[string]*string) int {
-				if *formValues["cmdStartConfirm"] == "yes" {
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["cmdStartConfirm"] == "yes" {
 					return -1
 				} else {
 					return -2
@@ -272,22 +294,25 @@ func AddFormWrapperGenerator() []FormWrapper {
 			"cmdReturnType":  new(string),
 		}
 		wrapper := FormWrapper{
-			Name:       "Add Command Info",
-			Form:       addCmdInfoFormGenerator,
-			Values:     values,
+			Name: "Add Command Info",
+			Form: addCmdInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addCommandInfoValues",
+			},
 			ShowStatus: false,
 			FormGroup:  "command",
-			Callback: func(formValues map[string]*string, modelValues map[string]*string, allForms []FormWrapper) {
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
 				command := CommandInfo{
-					Name:        *formValues["cmdName"],
-					Type:        *formValues["cmdType"],
-					Scope:       *formValues["cmdScope"],
-					Description: *formValues["cmdDescription"],
+					Name:        *formValues.Map["cmdName"],
+					Type:        *formValues.Map["cmdType"],
+					Scope:       *formValues.Map["cmdScope"],
+					Description: *formValues.Map["cmdDescription"],
 					Args:        []ArgInfo{},
-					ReturnType:  *formValues["cmdReturnType"],
+					ReturnType:  *formValues.Map["cmdReturnType"],
 				}
 				commandString, _ := command.ToJSON()
-				modelValues["currentCommand"] = &commandString
+				modelValues.Map["currentCommand"] = &commandString
 			},
 		}
 		forms = append(forms, wrapper)
@@ -297,18 +322,21 @@ func AddFormWrapperGenerator() []FormWrapper {
 			"argStartConfirm": new(string),
 		}
 		wrapper := FormWrapper{
-			Name:       "Add Argument Start",
-			Form:       addArgStartFormGenerator,
-			Values:     values,
+			Name: "Add Argument Start",
+			Form: addArgStartFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addArgumentStartValues",
+			},
 			ShowStatus: false,
 			FormGroup:  "argument",
-			Callback: func(formValues map[string]*string, modelValues map[string]*string, allForms []FormWrapper) {
-				allForms[4].Values["argName"] = new(string)
-				allForms[4].Values["argDescription"] = new(string)
-				allForms[4].Values["argType"] = new(string)
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				allForms[4].Values.Map["argName"] = new(string)
+				allForms[4].Values.Map["argDescription"] = new(string)
+				allForms[4].Values.Map["argType"] = new(string)
 			},
-			BranchCallback: func(formValues map[string]*string) int {
-				if *formValues["argStartConfirm"] == "yes" {
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["argStartConfirm"] == "yes" {
 					return -1
 				}
 				return 5
@@ -324,13 +352,16 @@ func AddFormWrapperGenerator() []FormWrapper {
 			"argType":        new(string),
 		}
 		wrapper := FormWrapper{
-			Name:       "Add Argument Info",
-			Form:       addArgInfoFormGenerator,
-			Values:     values,
+			Name: "Add Argument Info",
+			Form: addArgInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addArgumentInfoValues",
+			},
 			ShowStatus: false,
 			FormGroup:  "argument",
-			Callback: func(formValues map[string]*string, modelValues map[string]*string, allForms []FormWrapper) {
-				currentCommand, _ := JSONToCmdInfo(*modelValues["currentCommand"])
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentCommand, _ := JSONToCmdInfo(*modelValues.Map["currentCommand"])
 
 				currentCommand.Args = append(currentCommand.Args, ArgInfo{
 					Name:        *values["argName"],
@@ -338,14 +369,14 @@ func AddFormWrapperGenerator() []FormWrapper {
 					Description: *values["argDescription"],
 				})
 				argString, _ := ArgInfoSliceToJSON(currentCommand.Args)
-				formValues["args"] = &argString
+				formValues.Map["args"] = &argString
 				commandString, _ := currentCommand.ToJSON()
-				modelValues["currentCommand"] = &commandString
+				modelValues.Map["currentCommand"] = &commandString
 			},
-			BranchCallback: func(values map[string]*string) int {
+			BranchCallback: func(values Values, allForms []FormWrapper) int {
 				return 3
 			},
-			BranchValueHandler: func(targetFormIndex int, targetValues map[string]*string) {
+			BranchValueHandler: func(targetFormIndex int, targetValues Values) {
 				if targetFormIndex == 1 {
 					ResetFormValues(targetValues)
 				}
@@ -361,31 +392,34 @@ func AddFormWrapperGenerator() []FormWrapper {
 			"cmdAcceptConfirm": new(string),
 		}
 		wrapper := FormWrapper{
-			Name:       "Add Command Accept",
-			Form:       addCmdAcceptFormGenerator,
-			Values:     values,
+			Name: "Add Command Accept",
+			Form: addCmdAcceptFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addCommandAcceptValues",
+			},
 			ShowStatus: false,
 			FormGroup:  "command",
-			Callback: func(formValues map[string]*string, modelValues map[string]*string, allForms []FormWrapper) {
-				if *formValues["cmdAcceptConfirm"] == "yes" {
-					command, _ := JSONToCmdInfo(*modelValues["currentCommand"])
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				if *formValues.Map["cmdAcceptConfirm"] == "yes" {
+					command, _ := JSONToCmdInfo(*modelValues.Map["currentCommand"])
 					if command.Type == "slash" {
-						slashCommandList, _ := JSONToCmdInfoSlice(*modelValues["slashCommands"])
+						slashCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["slashCommands"])
 						slashCommandList = append(slashCommandList, *command)
 						jsonData, _ := CmdInfoSliceToJSON(slashCommandList)
-						modelValues["slashCommands"] = &jsonData
+						modelValues.Map["slashCommands"] = &jsonData
 					} else if command.Type == "prefix" {
-						prefixCommandList, _ := JSONToCmdInfoSlice(*modelValues["prefixCommands"])
+						prefixCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["prefixCommands"])
 						prefixCommandList = append(prefixCommandList, *command)
 						jsonData, _ := CmdInfoSliceToJSON(prefixCommandList)
-						modelValues["prefixCommands"] = &jsonData
+						modelValues.Map["prefixCommands"] = &jsonData
 					}
 				}
 			},
-			BranchCallback: func(values map[string]*string) int {
+			BranchCallback: func(values Values, allForms []FormWrapper) int {
 				return 1
 			},
-			BranchValueHandler: func(targetFormIndex int, targetValues map[string]*string) {
+			BranchValueHandler: func(targetFormIndex int, targetValues Values) {
 				if targetFormIndex == 1 {
 					ResetFormValues(targetValues)
 				}
@@ -400,11 +434,11 @@ func AddFormWrapperGenerator() []FormWrapper {
 	return forms
 }
 
-func addFileNameFormGenerator(values map[string]*string, modelValues map[string]*string) *huh.Form {
+func addFileNameFormGenerator(values Values, modelValues Values) *huh.Form {
 	fileNameForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
-				Value(values["filename"]).
+				Value(values.Map["filename"]).
 				Title("Enter the filename").
 				Prompt("> ").
 				Validate(func(s string) error {
@@ -419,7 +453,7 @@ func addFileNameFormGenerator(values map[string]*string, modelValues map[string]
 	return fileNameForm
 }
 
-func addCmdStartFormGenerator(values map[string]*string, modelValues map[string]*string) *huh.Form {
+func addCmdStartFormGenerator(values Values, modelValues Values) *huh.Form {
 	cmdStartForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
@@ -433,7 +467,7 @@ func addCmdStartFormGenerator(values map[string]*string, modelValues map[string]
 					} else {
 						s = "no"
 					}
-					values["cmdStartConfirm"] = &s
+					values.Map["cmdStartConfirm"] = &s
 					return nil
 				}),
 		),
@@ -441,11 +475,11 @@ func addCmdStartFormGenerator(values map[string]*string, modelValues map[string]
 	return cmdStartForm
 }
 
-func addCmdInfoFormGenerator(values map[string]*string, modelValues map[string]*string) *huh.Form {
+func addCmdInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 	cmdInfoForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
-				Value(values["cmdName"]).
+				Value(values.Map["cmdName"]).
 				Title("Enter the command name").
 				Prompt("> ").
 				Validate(func(s string) error {
@@ -455,15 +489,15 @@ func addCmdInfoFormGenerator(values map[string]*string, modelValues map[string]*
 					if strings.Contains(s, " ") {
 						return fmt.Errorf("command name cannot contain spaces")
 					}
-					slashCommandList, _ := JSONToCmdInfoSlice(*modelValues["slashCommands"])
-					prefixCommandList, _ := JSONToCmdInfoSlice(*modelValues["prefixCommands"])
+					slashCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["slashCommands"])
+					prefixCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["prefixCommands"])
 					if commandExists(s, append(slashCommandList, prefixCommandList...)) {
 						return fmt.Errorf("command name already exists")
 					}
 					return nil
 				}),
 			huh.NewSelect[string]().
-				Value(values["cmdType"]).
+				Value(values.Map["cmdType"]).
 				Title("Select the command type").
 				Options(
 					huh.NewOption("slash", "slash"),
@@ -479,7 +513,7 @@ func addCmdInfoFormGenerator(values map[string]*string, modelValues map[string]*
 					return nil
 				}),
 			huh.NewSelect[string]().
-				Value(values["cmdScope"]).
+				Value(values.Map["cmdScope"]).
 				Title("Select the command scope").
 				Options(
 					huh.NewOption("guild", "guild"),
@@ -495,7 +529,7 @@ func addCmdInfoFormGenerator(values map[string]*string, modelValues map[string]*
 					return nil
 				}),
 			huh.NewText().
-				Value(values["cmdDescription"]).
+				Value(values.Map["cmdDescription"]).
 				Title("Enter the command description").
 				CharLimit(400).
 				Validate(func(s string) error {
@@ -505,7 +539,7 @@ func addCmdInfoFormGenerator(values map[string]*string, modelValues map[string]*
 					return nil
 				}),
 			huh.NewSelect[string]().
-				Value(values["cmdReturnType"]).
+				Value(values.Map["cmdReturnType"]).
 				Title("Enter the command return type").
 				Options(
 					huh.NewOption("str", "str"),
@@ -528,11 +562,11 @@ func addCmdInfoFormGenerator(values map[string]*string, modelValues map[string]*
 	return cmdInfoForm
 }
 
-func addCmdAcceptFormGenerator(values map[string]*string, modelValues map[string]*string) *huh.Form {
+func addCmdAcceptFormGenerator(values Values, modelValues Values) *huh.Form {
 	var commandName, commandType, commandDesc, commandReturn, commandArgs string
 
-	if modelValues["currentCommand"] != nil && *modelValues["currentCommand"] != "" {
-		currentCommand, err := JSONToCmdInfo(*modelValues["currentCommand"])
+	if modelValues.Map["currentCommand"] != nil && *modelValues.Map["currentCommand"] != "" {
+		currentCommand, err := JSONToCmdInfo(*modelValues.Map["currentCommand"])
 		if err == nil {
 			commandName = currentCommand.Name
 			commandType = currentCommand.Type
@@ -568,7 +602,7 @@ func addCmdAcceptFormGenerator(values map[string]*string, modelValues map[string
 					} else {
 						s = "no"
 					}
-					values["cmdAcceptConfirm"] = &s
+					values.Map["cmdAcceptConfirm"] = &s
 					return nil
 				}),
 		),
@@ -576,7 +610,7 @@ func addCmdAcceptFormGenerator(values map[string]*string, modelValues map[string
 	return cmdAcceptForm
 }
 
-func addArgStartFormGenerator(values map[string]*string, modelValues map[string]*string) *huh.Form {
+func addArgStartFormGenerator(values Values, modelValues Values) *huh.Form {
 	argStartForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
@@ -590,7 +624,7 @@ func addArgStartFormGenerator(values map[string]*string, modelValues map[string]
 					} else {
 						s = "no"
 					}
-					values["argStartConfirm"] = &s
+					values.Map["argStartConfirm"] = &s
 					return nil
 				}),
 		),
@@ -598,11 +632,11 @@ func addArgStartFormGenerator(values map[string]*string, modelValues map[string]
 	return argStartForm
 }
 
-func addArgInfoFormGenerator(values map[string]*string, modelValues map[string]*string) *huh.Form {
+func addArgInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 	argInfoForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
-				Value(values["argName"]).
+				Value(values.Map["argName"]).
 				Title("Enter the argument name").
 				Prompt("> ").
 				Validate(func(s string) error {
@@ -612,14 +646,14 @@ func addArgInfoFormGenerator(values map[string]*string, modelValues map[string]*
 					if strings.Contains(s, " ") {
 						return fmt.Errorf("Argument name cannot contain spaces")
 					}
-					args, _ := JSONToArgInfoSlice(*values["args"])
+					args, _ := JSONToArgInfoSlice(*values.Map["args"])
 					if argExists(s, args) {
 						return fmt.Errorf("Argument name already exists")
 					}
 					return nil
 				}),
 			huh.NewText().
-				Value(values["argDescription"]).
+				Value(values.Map["argDescription"]).
 				Title("Enter the argument description").
 				CharLimit(200).
 				Validate(func(s string) error {
@@ -629,7 +663,7 @@ func addArgInfoFormGenerator(values map[string]*string, modelValues map[string]*
 					return nil
 				}),
 			huh.NewSelect[string]().
-				Value(values["argType"]).
+				Value(values.Map["argType"]).
 				Title("Enter the argument type").
 				Options(
 					huh.NewOption("str", "str"),
@@ -656,7 +690,6 @@ func addArgInfoFormGenerator(values map[string]*string, modelValues map[string]*
 /**
  * Remove Forms and Model Generators
  */
-
 func RemoveFormWrapperGenerator() []FormWrapper {
 	forms := []FormWrapper{}
 	{ // NOTE: 0
@@ -664,16 +697,31 @@ func RemoveFormWrapperGenerator() []FormWrapper {
 			"cogName": new(string),
 		}
 		wrapper := FormWrapper{
-			Name:       "Remove Cog",
-			Form:       removeCogFormGenerator,
-			Values:     values,
+			Name: "Remove Cog",
+			Form: removeCogFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "removeCogValues",
+			},
 			ShowStatus: true,
 			FormGroup:  "cog",
-			Callback: func(formValues map[string]*string, modelValues map[string]*string, allForms []FormWrapper) {
-				if formValues["cogName"] != nil {
-					*modelValues["cogName"] = *formValues["cogName"]
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				if formValues.Map["cogName"] != nil {
+					*modelValues.Map["cogName"] = *formValues.Map["cogName"]
 				} else {
-					*modelValues["cogName"] = ""
+					*modelValues.Map["cogName"] = ""
+				}
+			},
+			SkipCondition: func(modelValues Values, allForms []FormWrapper, currentIndex int) bool {
+				if modelValues.Map["cogName"] != nil && *modelValues.Map["cogName"] != "" {
+					return true
+				}
+				return false
+			},
+			SkipCallback: func(modelValues Values, allForms []FormWrapper, currentIndex int) {
+				if modelValues.Map["cogName"] != nil && *modelValues.Map["cogName"] != "" {
+					cogName := *modelValues.Map["cogName"]
+					allForms[currentIndex].Values.Map["cogName"] = &cogName
 				}
 			},
 		}
@@ -682,7 +730,7 @@ func RemoveFormWrapperGenerator() []FormWrapper {
 	return forms
 }
 
-func removeCogFormGenerator(values map[string]*string, modelValues map[string]*string) *huh.Form {
+func removeCogFormGenerator(values Values, modelValues Values) *huh.Form {
 	config, err := LoadConfig()
 	if err != nil {
 		fmt.Println("Error loading config:", err)
@@ -716,7 +764,7 @@ func removeCogFormGenerator(values map[string]*string, modelValues map[string]*s
 	cmdRemoveForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
-				Value(values["cogName"]).
+				Value(values.Map["cogName"]).
 				Height(8).
 				Title("Select a cog to remove").
 				Options(huh.NewOptions(cogList...)...),
@@ -736,7 +784,7 @@ func ConfigFormWrapperGenerator() []FormWrapper {
  * Nont specific forms for special use cases
  */
 
-func finalCompleteFormGenerator(values map[string]*string, modelValues map[string]*string) *huh.Form {
+func finalCompleteFormGenerator(values Values, modelValues Values) *huh.Form {
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewNote().
@@ -748,6 +796,22 @@ func finalCompleteFormGenerator(values map[string]*string, modelValues map[strin
 	form.State = huh.StateCompleted
 
 	return form
+}
+
+func ConfigSyncFormWrapperGenerator() []FormWrapper {
+	return []FormWrapper{
+		{
+			Name: "Sync Config",
+			Form: finalCompleteFormGenerator,
+			Values: Values{
+				Map:  map[string]*string{},
+				Name: "configSyncValues",
+			},
+			ShowStatus: false,
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+			},
+		},
+	}
 }
 
 /*

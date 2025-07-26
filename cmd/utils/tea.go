@@ -16,61 +16,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const maxWidth = 180
-
 var (
-	red      = lipgloss.AdaptiveColor{Light: "#FE5F86", Dark: "#FE5F86"}
-	indigo   = lipgloss.AdaptiveColor{Light: "#5A56E0", Dark: "#7571F9"}
-	green    = lipgloss.AdaptiveColor{Light: "#02BA84", Dark: "#02BF87"}
-	cyan     = lipgloss.AdaptiveColor{Light: "#00FFFF", Dark: "#0066aa"}
-	white    = lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#FFFFFF"}
-	blue     = lipgloss.AdaptiveColor{Light: "#0077FF", Dark: "#0000FF"}
-	navy     = lipgloss.AdaptiveColor{Light: "#000080", Dark: "#000080"}
-	sapphire = lipgloss.AdaptiveColor{Light: "#0F52BA", Dark: "#0F52BA"}
-	emerald  = lipgloss.AdaptiveColor{Light: "#50C878", Dark: "#50C878"}
+	globalConfig GlobalConfig
 )
 
-type Styles struct {
-	Base,
-	HeaderText,
-	Status,
-	StatusHeader,
-	Highlight,
-	ErrorHeaderText,
-	KeyText,
-	ValueText,
-	Help lipgloss.Style
-}
-
-func NewStyles(lg *lipgloss.Renderer) *Styles {
-	s := Styles{}
-	s.Base = lg.NewStyle().
-		Padding(1, 4, 0, 1)
-	s.HeaderText = lg.NewStyle().
-		Foreground(cyan).
-		Bold(true).
-		Padding(0, 1, 0, 2)
-	s.Status = lg.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(cyan).
-		PaddingLeft(1).
-		MarginTop(1)
-	s.StatusHeader = lg.NewStyle().
-		Foreground(green).
-		Bold(true)
-	s.Highlight = lg.NewStyle().
-		Foreground(lipgloss.Color("212"))
-	s.ErrorHeaderText = s.HeaderText.
-		Foreground(red)
-	s.KeyText = lg.NewStyle().
-		Foreground(indigo).
-		Bold(true)
-	s.ValueText = lg.NewStyle().
-		Foreground(emerald)
-	s.Help = lg.NewStyle().
-		Foreground(lipgloss.Color("240"))
-	return &s
-}
+const maxWidth = 180
 
 type state int
 
@@ -85,62 +35,107 @@ type FormField struct {
 	Field huh.Field
 }
 
-type FormWrapper struct {
-	Name               string
-	Form               func(map[string]*string, map[string]*string) *huh.Form
-	Values             map[string]*string
-	Callback           func(formValues map[string]*string, modelValues map[string]*string, allForms []FormWrapper)
-	BranchCallback     func(map[string]*string) int
-	ShowStatus         bool
-	FormGroup          string
-	BranchValueHandler func(targetFormIndex int, targetValues map[string]*string)
+type Values struct {
+	Map  map[string]*string
+	Name string
 }
 
-func (fw *FormWrapper) GetValues() map[string]string {
-	result := make(map[string]string)
-	for key, ptr := range fw.Values {
+type FormWrapper struct {
+	Name               string
+	Form               func(Values, Values) *huh.Form
+	Values             Values
+	SkipCondition      func(ModelValues Values, allForms []FormWrapper, currentIndex int) bool
+	SkipCallback       func(ModelValues Values, allForms []FormWrapper, currentIndex int)
+	Callback           func(formValues Values, ModelValues Values, allForms []FormWrapper)
+	BranchCallback     func(Values, []FormWrapper) int
+	ShowStatus         bool
+	FormGroup          string
+	BranchValueHandler func(targetFormIndex int, targetValues Values)
+}
+
+func (fw *FormWrapper) GetValues() Values {
+	resultMap := make(map[string]string)
+	for key, ptr := range fw.Values.Map {
 		if ptr != nil {
-			result[key] = *ptr
+			resultMap[key] = *ptr
 		}
+	}
+	result := Values{
+		Map:  make(map[string]*string),
+		Name: fmt.Sprintf("%s_%s_%s", fw.FormGroup, fw.Name, fw.Values.Name),
 	}
 	return result
 }
 
-func (fw *FormWrapper) ExecuteCallback(ModelValues map[string]*string, allForms []FormWrapper) {
+func (fw *FormWrapper) ExecuteCallback(ModelValues Values, allForms []FormWrapper) {
 	if fw.Callback != nil {
 		fw.Callback(fw.Values, ModelValues, allForms)
 	}
 }
 
-func (fw *FormWrapper) ExecuteBranchCallback() int {
+func (fw *FormWrapper) ExecuteBranchCallback(allForms []FormWrapper) int {
 	if fw.BranchCallback != nil {
-		return fw.BranchCallback(fw.Values)
+		return fw.BranchCallback(fw.Values, allForms)
 	}
 	return -1
 }
 
+func (fw *FormWrapper) ShouldSkip(ModelValues Values, allForms []FormWrapper, currentIndex int) bool {
+	if fw.SkipCondition != nil {
+		return fw.SkipCondition(ModelValues, allForms, currentIndex)
+	}
+	return false
+}
+
+func (fw *FormWrapper) ExecuteSkipCallback(ModelValues Values, allForms []FormWrapper, currentIndex int) {
+	if fw.SkipCallback != nil {
+		fw.SkipCallback(ModelValues, allForms, currentIndex)
+	}
+}
+
 func (m *Model) Init() tea.Cmd {
+	conf, err := LoadGlobalConfig()
+	if err != nil {
+		errors := []error{fmt.Errorf("failed to load global config: %w", err)}
+		m.HandleError(errors)
+	}
+	globalConfig = *conf
+
 	originalFormsCount := len(m.forms)
 
 	m.forms = append(m.forms, FormWrapper{
 		Name:       "Complete",
 		Form:       finalCompleteFormGenerator,
-		Values:     m.modelValues,
+		Values:     m.ModelValues,
 		ShowStatus: true,
 		FormGroup:  "final",
 	})
-	allValueMaps := make([]map[string]*string, len(m.forms))
+
+	allValueMaps := make([]Values, len(m.forms))
 	for i, form := range m.forms {
+		if form.Values.Map == nil {
+			form.Values.Map = make(map[string]*string)
+		}
 		allValueMaps[i] = form.Values
 	}
 
+	if m.ModelValues.Map == nil {
+		m.ModelValues.Map = make(map[string]*string)
+	}
+
 	if m.initCallback != nil {
-		m.initCallback(m.modelValues, allValueMaps)
+		m.initCallback(m, allValueMaps)
+	}
+
+	if m.Error != nil {
+		m.jumpToFinalStatus()
+		m.currentForm.WithShowHelp(false)
+		return m.currentForm.Init()
 	}
 
 	if originalFormsCount == 0 {
 		m.currentFormPtr = len(m.forms) - 1
-		m.currentForm = m.forms[m.currentFormPtr].Form(m.forms[m.currentFormPtr].Values, m.modelValues)
+		m.currentForm = m.forms[m.currentFormPtr].Form(m.forms[m.currentFormPtr].Values, m.ModelValues)
 		if m.currentForm == nil {
 			return tea.Quit
 		}
@@ -149,38 +144,68 @@ func (m *Model) Init() tea.Cmd {
 		return m.currentForm.Init()
 	}
 
-	m.currentForm = m.forms[m.currentFormPtr].Form(m.forms[m.currentFormPtr].Values, m.modelValues)
+	if !m.setCurrentFormToValidForm(0) {
+		return m.handleDirectCompletion()
+	}
+
+	m.currentForm = m.forms[m.currentFormPtr].Form(m.forms[m.currentFormPtr].Values, m.ModelValues)
 	if m.currentForm == nil {
 		return tea.Quit
 	}
+
 	m.currentForm.WithShowHelp(false)
 	return m.currentForm.Init()
 }
 
 type Model struct {
-	title           string
-	state           state
-	lg              *lipgloss.Renderer
-	styles          *Styles
-	currentFormPtr  int
-	currentForm     *huh.Form
-	forms           []FormWrapper
-	width           int
-	initCallback    func(map[string]*string, []map[string]*string)
-	callback        func(values map[string]string)
-	displayCallback func() string
-	modelValues     map[string]*string
-	displayKeys     []string
+	viewportOffset    int
+	viewportHeight    int
+	maxViewportHeight int
+	title             string
+	state             state
+	lg                *lipgloss.Renderer
+	styles            *Styles
+	currentFormPtr    int
+	currentForm       *huh.Form
+	forms             []FormWrapper
+	width             int
+	initCallback      func(*Model, []Values)
+	callback          func(*Model) []error
+	displayCallback   func() string
+	ModelValues       Values
+	displayKeys       []string
+	Error             []error
+}
+
+func (m *Model) resetViewport() {
+	m.viewportOffset = 0
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = int(math.Min(float64(msg.Width), float64(maxWidth))) - m.styles.Base.GetHorizontalFrameSize()
+		m.viewportHeight = msg.Height - 8
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Interrupt
+
+			// NOTE: Uncomment to enable scrolling functionality
+		// case "up":
+		// 	if m.state != stateDone && m.viewportOffset > 0 {
+		// 		m.viewportOffset--
+		// 		return m, nil
+		// 	}
+		// case "down":
+		// 	if m.state != stateDone {
+		// 		maxOffset := m.getMaxViewportOffset()
+		// 		if m.viewportOffset < maxOffset {
+		// 			m.viewportOffset++
+		// 			return m, nil
+		// 		}
+		// 	}
+
 		case "esc":
 			return m, tea.Quit
 		case "q":
@@ -198,6 +223,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.Error != nil && m.state != stateDone {
+		m.jumpToFinalStatus()
+		return m, nil
+	}
+
 	var cmds []tea.Cmd
 
 	if m.state != stateDone {
@@ -208,7 +238,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.currentForm.State == huh.StateCompleted {
-			m.forms[m.currentFormPtr].ExecuteCallback(m.modelValues, m.forms)
+			m.forms[m.currentFormPtr].ExecuteCallback(m.ModelValues, m.forms)
 			m.state = stateDone
 
 			if !m.forms[m.currentFormPtr].ShowStatus {
@@ -221,13 +251,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleFormCompletion() (tea.Model, tea.Cmd) {
+	if m.Error != nil {
+		m.jumpToFinalStatus()
+		return m, nil
+	}
 	if m.forms[m.currentFormPtr].BranchCallback != nil {
-		branchIndex := m.forms[m.currentFormPtr].ExecuteBranchCallback()
+		branchIndex := m.forms[m.currentFormPtr].ExecuteBranchCallback(m.forms)
 
 		if branchIndex == -1 {
-			if m.currentFormPtr < len(m.forms)-1 {
-				m.currentFormPtr++
-			} else {
+			if !m.moveToNextValidForm() {
 				return m.handleFinalCompletion()
 			}
 		} else if branchIndex == -2 {
@@ -236,22 +268,30 @@ func (m *Model) handleFormCompletion() (tea.Model, tea.Cmd) {
 			if m.forms[m.currentFormPtr].BranchValueHandler != nil {
 				m.forms[m.currentFormPtr].BranchValueHandler(branchIndex, m.forms[branchIndex].Values)
 			}
-			m.currentFormPtr = branchIndex
+
+			if m.forms[branchIndex].ShouldSkip(m.ModelValues, m.forms, branchIndex) {
+				m.forms[branchIndex].ExecuteSkipCallback(m.ModelValues, m.forms, branchIndex)
+				if !m.setCurrentFormToValidForm(branchIndex + 1) {
+					return m.handleFinalCompletion()
+				}
+			} else {
+				m.currentFormPtr = branchIndex
+			}
 		}
 	} else {
-		if m.currentFormPtr < len(m.forms)-1 {
-			m.currentFormPtr++
-		} else {
+		if !m.moveToNextValidForm() {
 			return m.handleFinalCompletion()
 		}
 	}
 
 	if m.currentFormPtr < len(m.forms) {
-		newForm := m.forms[m.currentFormPtr].Form(m.forms[m.currentFormPtr].Values, m.modelValues)
+		m.resetViewport()
+
+		newForm := m.forms[m.currentFormPtr].Form(m.forms[m.currentFormPtr].Values, m.ModelValues)
 
 		if newForm.State == huh.StateCompleted {
 			m.currentForm = newForm
-			m.forms[m.currentFormPtr].ExecuteCallback(m.modelValues, m.forms)
+			m.forms[m.currentFormPtr].ExecuteCallback(m.ModelValues, m.forms)
 			m.state = stateDone
 
 			if m.forms[m.currentFormPtr].ShowStatus || m.currentFormPtr >= len(m.forms)-1 {
@@ -306,20 +346,35 @@ func (m Model) View() string {
 
 	switch m.currentForm.State {
 	case huh.StateCompleted:
+		versionMessage := s.Highlight.Render(fmt.Sprintf("BotBox Version: %s", Version))
 		if m.forms[m.currentFormPtr].ShowStatus || m.currentFormPtr >= len(m.forms)-1 {
 			var message string
-			if m.displayCallback == nil {
-				var values map[string]string
+
+			if m.Error != nil {
+				var b strings.Builder
+				b.WriteString("Errors:\n\n")
+				for _, err := range m.Error {
+					if b.Len() > 0 {
+						b.WriteString("\n")
+					}
+					b.WriteString(err.Error())
+				}
+
+				header := m.appBoundaryView(m.title)
+				statusBox := s.Status.Margin(0, 0).Padding(1, 2).Width(80).Render(b.String())
+				message = header + "\n" + statusBox
+			} else if m.displayCallback == nil {
+				var b strings.Builder
+				var values Values
 				if m.displayKeys == nil || len(m.displayKeys) == 0 {
 					values = m.getValues()
 				} else {
 					values = m.GetValuesByKeys(m.displayKeys)
 				}
-				var b strings.Builder
 
-				for key, value := range values {
+				for key, value := range values.Map {
 					key := s.HeaderText.Render(key)
-					value := s.Highlight.Render(value)
+					value := s.Highlight.Render(*value)
 					if key == "" && value == "" {
 						continue
 					}
@@ -346,13 +401,25 @@ func (m Model) View() string {
 			}
 
 			confirmPrompt := s.Highlight.Render("Press Enter to submit, or Esc/Q to cancel.")
-			return s.Base.Render(message + "\n\n" + confirmPrompt + "\n\n")
+			return s.Base.Render(message + "\n\n" + confirmPrompt + "\n\n" + versionMessage + "\n\n")
 		}
 		header := m.appBoundaryView(m.title)
 		message := s.Highlight.Render("Press Enter to continue.")
-		return s.Base.Render(header + "\n" + message + "\n\n")
+		return s.Base.Render(header + "\n" + message + "\n\n" + versionMessage + "\n\n")
 	default:
 		v := strings.TrimSuffix(m.currentForm.View(), "\n\n")
+
+		lines := strings.Split(v, "\n")
+		if m.viewportOffset > 0 && len(lines) > m.viewportHeight {
+			startLine := m.viewportOffset
+			endLine := min(m.viewportOffset+m.viewportHeight, len(lines))
+			if startLine < len(lines) {
+				v = strings.Join(lines[startLine:endLine], "\n")
+			}
+		} else if len(lines) > m.viewportHeight {
+			v = strings.Join(lines[:m.viewportHeight], "\n")
+		}
+
 		form := m.lg.NewStyle().Margin(1, 0).Render(v)
 
 		errors := m.currentForm.Errors()
@@ -368,7 +435,21 @@ func (m Model) View() string {
 			footer = m.appErrorBoundaryView("")
 		}
 
-		return s.Base.Render(header + "\n" + body + "\n\n" + footer)
+		// NOTE: Uncomment to enable scrolling functionality
+		// scrollIndicator := ""
+		// maxOffset := m.getMaxViewportOffset()
+		// if maxOffset > 0 {
+		// 	scrollIndicator = s.Help.Render(fmt.Sprintf("↑/↓ to scroll (line %d-%d of %d)",
+		// 		m.viewportOffset+1,
+		// 		int(math.Min(float64(m.viewportOffset+m.viewportHeight), float64(len(strings.Split(strings.TrimSuffix(m.currentForm.View(), "\n\n"), "\n"))))),
+		// 		len(strings.Split(strings.TrimSuffix(m.currentForm.View(), "\n\n"), "\n"))))
+		// }
+
+		return s.Base.Render(header + "\n" + body + "\n\n" +
+			footer + "\n" +
+			// NOTE: Uncomment to enable scrolling functionality
+			// scrollIndicator +
+			"\n\n" + s.Highlight.Render("BotBox Version: "+Version) + "\n\n")
 	}
 }
 
@@ -400,22 +481,22 @@ func (m Model) appErrorBoundaryView(text string) string {
 	)
 }
 
-func (m Model) GetValuesByKeys(keys []string) map[string]string {
+func (m Model) GetValuesByKeys(keys []string) Values {
 	values := m.GetAllValuesFlat()
 	for _, key := range keys {
-		if value, exists := m.modelValues[key]; exists && value != nil {
-			values[key] = *value
+		if value, exists := m.ModelValues.Map[key]; exists && value != nil {
+			values.Map[key] = value
 		}
 	}
 	return values
 }
 
-func (m Model) getValues() map[string]string {
+func (m *Model) getValues() Values {
 	return m.forms[m.currentFormPtr].GetValues()
 }
 
-func CupSleeve(cup tea.Model) {
-	_, err := tea.NewProgram(cup, tea.WithAltScreen()).Run()
+func CupSleeve(cup Model) {
+	_, err := tea.NewProgram(&cup, tea.WithAltScreen()).Run()
 
 	if err != nil {
 		fmt.Println("Error:", err)
@@ -425,8 +506,7 @@ func CupSleeve(cup tea.Model) {
 
 func (m *Model) executeCallback() {
 	if m.callback != nil {
-		allValues := m.GetAllValuesFlat()
-		m.callback(allValues)
+		m.HandleError(m.callback(m))
 	}
 }
 
@@ -438,8 +518,8 @@ func (m *Model) SetForms(forms []FormWrapper) {
 	m.forms = forms
 }
 
-func (m *Model) GetAllValues() map[string]string {
-	allValues := make(map[string]string)
+func (m *Model) GetAllValues() Values {
+	allValues := make(map[string]*string)
 
 	for i, form := range m.forms {
 		formValues := form.GetValues()
@@ -451,77 +531,212 @@ func (m *Model) GetAllValues() map[string]string {
 			prefix = fmt.Sprintf("form_%d", i)
 		}
 
-		for key, value := range formValues {
+		for key, value := range formValues.Map {
 			uniqueKey := fmt.Sprintf("%s_%s", prefix, key)
 			allValues[uniqueKey] = value
 		}
 	}
-
-	return allValues
+	result := Values{
+		Map:  allValues,
+		Name: fmt.Sprintf("%s_%s", m.title, "all_values"),
+	}
+	return result
 }
 
-func (m *Model) GetAllValuesFlat() map[string]string {
-	allValues := make(map[string]string)
+func (m *Model) FlattenModelValuesWithPrefix() {
+	for key, value := range m.ModelValues.Map {
+		if value != nil {
+			m.ModelValues.Map[key] = new(string)
+			*m.ModelValues.Map[key] = *value
+		} else {
+			m.ModelValues.Map[key] = new(string)
+		}
+	}
 
-	for key, ptr := range m.modelValues {
+	for i, form := range m.forms {
+		prefix := strings.ToLower(strings.ReplaceAll(form.Name, " ", "_"))
+		if prefix == "" {
+			prefix = fmt.Sprintf("form_%d", i)
+		}
+
+		for key, value := range form.Values.Map {
+			if value != nil && *value != "" {
+				newKey := fmt.Sprintf("%s_%s", prefix, key)
+				m.ModelValues.Map[newKey] = value
+			}
+		}
+	}
+}
+
+func (m *Model) GetAllValuesFlat() Values {
+	allValues := make(map[string]*string)
+	for key, ptr := range m.ModelValues.Map {
 		if ptr != nil && *ptr != "" {
-			allValues[key] = *ptr
+			allValues[key] = ptr
 		}
 	}
 
 	for _, form := range m.forms {
 		formValues := form.GetValues()
-		maps.Copy(allValues, formValues)
+		maps.Copy(allValues, formValues.Map)
 	}
 
-	return allValues
+	result := Values{
+		Map:  allValues,
+		Name: fmt.Sprintf("%s_%s", m.title, "all_values"),
+	}
+	return result
 }
 
-func (m *Model) GetValuesByFormName(formName string) map[string]string {
-	for _, form := range m.forms {
-		if form.Name == formName {
-			return form.GetValues()
+func (m *Model) FlattenModelValues() {
+	for key, value := range m.ModelValues.Map {
+		if value != nil {
+			m.ModelValues.Map[key] = new(string)
+			*m.ModelValues.Map[key] = *value
+		} else {
+			m.ModelValues.Map[key] = new(string)
 		}
 	}
-	return make(map[string]string)
 }
 
-func (m *Model) GetValuesByFormIndex(index int) map[string]string {
-	if index >= 0 && index < len(m.forms) {
-		return m.forms[index].GetValues()
+func (m *Model) GetValuesByFormName(formName string) Values {
+	for _, form := range m.forms {
+		if form.Name == formName {
+			values := form.GetValues()
+			values.Name = fmt.Sprintf("%s_%s", m.title, formName)
+			return values
+		}
 	}
-	return make(map[string]string)
+	return Values{
+		Map:  make(map[string]*string),
+		Name: fmt.Sprintf("%s_%s", m.title, formName),
+	}
+}
+
+func (m *Model) GetValuesByFormIndex(index int) Values {
+	if index >= 0 && index < len(m.forms) {
+		values := m.forms[index].GetValues()
+		values.Name = fmt.Sprintf("%s_form_%d", m.title, index)
+		return values
+	}
+	return Values{
+		Map:  make(map[string]*string),
+		Name: fmt.Sprintf("%s_form_%d", m.title, index),
+	}
 }
 
 func (m *Model) GetValue(formName, key string) (string, bool) {
 	formValues := m.GetValuesByFormName(formName)
-	value, exists := formValues[key]
-	return value, exists
+	value, exists := formValues.Map[key]
+	return *value, exists
 }
 
 func (m *Model) GetValueFlat(key string) (string, bool) {
 	for _, form := range m.forms {
 		formValues := form.GetValues()
-		if value, exists := formValues[key]; exists {
-			return value, true
+		if value, exists := formValues.Map[key]; exists {
+			return *value, true
 		}
 	}
 	return "", false
 }
 
-func ResetFormValues(values map[string]*string) {
-	for key := range values {
-		values[key] = new(string)
+func (m *Model) findNextValidForm(startIndex int) int {
+	for i := startIndex; i < len(m.forms); i++ {
+		if !m.forms[i].ShouldSkip(m.ModelValues, m.forms, i) {
+			return i
+		}
+		m.forms[i].ExecuteSkipCallback(m.ModelValues, m.forms, i)
+	}
+	return -1
+}
+
+func (m *Model) moveToNextValidForm() bool {
+	nextIndex := m.findNextValidForm(m.currentFormPtr + 1)
+	if nextIndex == -1 {
+		return false
+	}
+	m.currentFormPtr = nextIndex
+	return true
+}
+
+func (m *Model) setCurrentFormToValidForm(startIndex int) bool {
+	validIndex := m.findNextValidForm(startIndex)
+	if validIndex == -1 {
+		return false
+	}
+	m.currentFormPtr = validIndex
+	return true
+}
+
+func (m *Model) handleDirectCompletion() tea.Cmd {
+	m.currentFormPtr = len(m.forms) - 1
+	m.currentForm = m.forms[m.currentFormPtr].Form(m.forms[m.currentFormPtr].Values, m.ModelValues)
+	if m.currentForm == nil {
+		return tea.Quit
+	}
+	m.currentForm.WithShowHelp(false)
+	m.state = stateDone
+	return m.currentForm.Init()
+}
+
+func (m *Model) HandleError(err []error) {
+	m.Error = err
+	m.jumpToFinalStatus()
+}
+
+func (m *Model) jumpToFinalStatus() {
+	m.currentFormPtr = len(m.forms) - 1
+	m.createFinalStatusForm()
+	m.state = stateDone
+}
+
+func FlattenValuesInto(targetValues Values, sourceValues Values) {
+	for key, value := range sourceValues.Map {
+		if existingValue, exists := targetValues.Map[key]; exists && existingValue != nil {
+			*existingValue = *value
+		} else {
+			newValue := value
+			targetValues.Map[key] = newValue
+		}
 	}
 }
 
-func PreserveFormValues(values map[string]*string) {}
+func MergeValues(targetValues Values, sourceValues Values) Values {
+	for key, value := range sourceValues.Map {
+		if existingValue, exists := targetValues.Map[key]; exists && existingValue != nil {
+			suffix := 1
+			for {
+				if _, exists := targetValues.Map[fmt.Sprintf("%s_%d", key, suffix)]; !exists {
+					newKey := fmt.Sprintf("%s_%d", key, suffix)
+					newValue := value
+					targetValues.Map[newKey] = newValue
+					break
+				}
+				suffix++
+			}
 
-func SetSpecificValues(values map[string]*string, updates map[string]string) {
-	for key, value := range updates {
-		if _, exists := values[key]; exists {
+		} else {
 			newValue := value
-			values[key] = &newValue
+			targetValues.Map[key] = newValue
+		}
+	}
+	return targetValues
+}
+
+func ResetFormValues(values Values) {
+	for key := range values.Map {
+		values.Map[key] = new(string)
+	}
+}
+
+func PreserveFormValues(values Values) {}
+
+func SetSpecificValues(values Values, updates Values) {
+	for key, value := range updates.Map {
+		if _, exists := values.Map[key]; exists {
+			newValue := value
+			values.Map[key] = newValue
 		}
 	}
 }

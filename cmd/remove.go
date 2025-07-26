@@ -17,9 +17,8 @@ import (
 )
 
 var (
-	cogRemoveName string
+	removeCogName string
 	cogRemove     utils.CogConfig
-	cogName       string
 )
 
 var removeCmd = &cobra.Command{
@@ -29,29 +28,43 @@ var removeCmd = &cobra.Command{
 You can specify the cog to remove by providing its name as an argument or select it from a list of available cogs.
   `,
 	Run: func(cmd *cobra.Command, args []string) {
-		model := utils.RemoveModel(removeCallback)
-		utils.CupSleeve(&model)
+		_, err := utils.FindBotConf()
+		if err != nil {
+			fmt.Println("Current directory is not in a botbox project.")
+			return
+		}
+
+		if len(args) > 0 {
+			removeCogName = args[0]
+		} else {
+			removeCogName = ""
+		}
+		model := utils.RemoveModel(removeCallback, removeInitCallback)
+		utils.CupSleeve(model)
 	},
 }
 
-func removeCallback(values map[string]string) {
-	filename := values["cogName"]
+func removeCallback(model *utils.Model) []error {
+	var errors []error
+	values := model.ModelValues
+	filename := values.Map["cogName"]
 
 	rootDir, err := utils.FindBotConf()
 	if err != nil {
-		return
+		errors = append(errors, fmt.Errorf("error finding root directory: %w", err))
+		return errors
 	}
 
 	configPath := filepath.Join(rootDir, "botbox.conf")
 
 	config, err := utils.LoadConfig()
 	if err != nil {
-		fmt.Println("Error loading config:", err)
-		return
+		errors = append(errors, fmt.Errorf("error loading config: %w", err))
+		return errors
 	}
 
 	for i, cog := range config.Cogs {
-		if cog.Name == filename {
+		if cog.Name == *filename {
 			cogRemove = cog
 			config.Cogs = slices.Delete(config.Cogs, i, i+1)
 		}
@@ -59,31 +72,53 @@ func removeCallback(values map[string]string) {
 
 	jsonData, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
-		fmt.Println("failed to marshal config to JSON: %w", err)
-		return
+		errors = append(errors, fmt.Errorf("error marshalling config to JSON: %w", err))
+		return errors
 	}
 
 	err = os.Remove(rootDir + "/src/cogs/" + cogRemove.File + ".py")
 
 	err = os.WriteFile(configPath, jsonData, 0644)
 	if err != nil {
-		fmt.Println("failed to write updated botbox.conf: %w", err)
-		return
+		errors = append(errors, fmt.Errorf("failed to write updated botbox.conf: %w", err))
+		return errors
+	}
+	return nil
+}
+
+func removeInitCallback(model *utils.Model, allFormsModels []utils.Values) {
+	var errors []error
+	modelValues := model.ModelValues
+	if removeCogName != "" {
+		*modelValues.Map["cogName"] = removeCogName
+		configs, err := utils.LoadConfig()
+		if err != nil {
+			errors = append(errors, fmt.Errorf("error loading configuration: %w", err))
+			model.HandleError(errors)
+			return
+		}
+		if len(configs.Cogs) == 0 {
+			errors = append(errors, fmt.Errorf("error: no cogs available to remove"))
+			model.HandleError(errors)
+			return
+		}
+		cogExists := false
+		for _, cog := range configs.Cogs {
+			if cog.Name == removeCogName {
+				cogExists = true
+				break
+			}
+		}
+		if !cogExists {
+			errors = append(errors, fmt.Errorf("cog '%s' does not exist in the project", removeCogName))
+			model.HandleError(errors)
+			return
+		}
 	}
 }
 
 func init() {
 	rootCmd.AddCommand(removeCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// removeCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// removeCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 /*

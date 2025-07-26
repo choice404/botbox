@@ -19,6 +19,14 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
+var (
+	Version string
+)
+
+func SetVersion(version string) {
+	Version = version
+}
+
 func Banner() {
 	fmt.Println(`
     ____        __     ____            
@@ -115,7 +123,7 @@ func FetchLicense(licenseKey string) (string, error) {
 	return licenseResp.Body, nil
 }
 
-func CreateProject(rootDir string, values map[string]string) {
+func CreateProject(rootDir string, values Values) error {
 	directories := []string{
 		"src",
 		"src/cogs",
@@ -125,28 +133,29 @@ func CreateProject(rootDir string, values map[string]string) {
 		fullPath := filepath.Join(rootDir, dir)
 		err := os.MkdirAll(fullPath, os.ModePerm)
 		if err != nil {
-			fmt.Printf("Error creating directory %s: %v\n", fullPath, err)
-			return
+			return fmt.Errorf("error creating directory %s: %w", fullPath, err)
 		}
 	}
 
 	if confOpt, err := CreateFileOption(filepath.Join(rootDir, "botbox.conf")); err == nil && confOpt {
 		confFile, err := os.Create(filepath.Join(rootDir, "botbox.conf"))
 		if err != nil {
-			fmt.Printf("Error creating botbox.conf file: %v\n", err)
-			return
+			return fmt.Errorf("Error creating botbox.conf file: %v\n", err)
 		}
 		defer confFile.Close()
 
 		var confContent strings.Builder
 
 		fmt.Fprintf(&confContent, `{
+  "botbox": {
+    "version": "%s"
+  },
   "bot": {
     "name": "%s",
     "command_prefix": "%s",
     "author": "%s",
     "description": "%s" 
-  },`, values["botName"], values["botPrefix"], values["botAuthor"], values["botDescription"])
+  },`, Version, *values.Map["botName"], *values.Map["botPrefix"], *values.Map["botAuthor"], *values.Map["botDescription"])
 		confContent.WriteString(`
   "cogs": [
     {
@@ -159,7 +168,7 @@ func CreateProject(rootDir string, values map[string]string) {
           "Scope": "guild",
           "Type": "slash",
           "Description": "Bot responds with world",
-          "Args": [],
+          "Args": null,
           "ReturnType": "None"
         }
       ],
@@ -178,7 +187,7 @@ func CreateProject(rootDir string, values map[string]string) {
           "Args": [
           {
             "Name": "cog_name",
-            "Type": "string",
+            "Type": "str",
             "Description": "The name of the cog to reload (without .py cog)"
           }
           ],
@@ -189,7 +198,7 @@ func CreateProject(rootDir string, values map[string]string) {
           "Scope": "guild",
           "Type": "slash",
           "Description": "Reloads all cogs",
-          "Args": [],
+          "Args": null,
           "ReturnType": "None"
         },
         {
@@ -197,7 +206,7 @@ func CreateProject(rootDir string, values map[string]string) {
           "Scope": "guild",
           "Type": "slash",
           "Description": "Lists all available cogs",
-          "Args": [],
+          "Args": null,
           "ReturnType": "None"
         },
         {
@@ -208,7 +217,7 @@ func CreateProject(rootDir string, values map[string]string) {
           "Args": [
           {
             "Name": "cog_name",
-            "Type": "string",
+            "Type": "str",
             "Description": "The name of the cog to unload (without .py cog)"
           }
           ],
@@ -222,7 +231,7 @@ func CreateProject(rootDir string, values map[string]string) {
           "Args": [
           {
             "Name": "cog_name",
-            "Type": "string",
+            "Type": "str",
             "Description": "The name of the cog to load (without .py cog)"
           }
           ],
@@ -239,15 +248,13 @@ func CreateProject(rootDir string, values map[string]string) {
 	} else if err == nil && !confOpt {
 		fmt.Println("Not overriding botbox.conf file.")
 	} else {
-		fmt.Printf("Error creating botbox.conf file: %v\n", err)
-		return
+		return fmt.Errorf("error creating botbox.conf file: %w", err)
 	}
 
 	if readmeOpt, err := CreateFileOption(filepath.Join(rootDir, "README.md")); err == nil && readmeOpt {
 		readmeFile, err := os.Create(filepath.Join(rootDir, "README.md"))
 		if err != nil {
-			fmt.Printf("Error creating README.md file: %v\n", err)
-			return
+			return fmt.Errorf("Error creating README.md file: %v\n", err)
 		}
 		defer readmeFile.Close()
 
@@ -297,114 +304,101 @@ chmod +x run.sh
 `+"```"+`
 
 ## License
-`, values["botName"], values["botDescription"], values["botAuthor"])
+`, *values.Map["botName"], *values.Map["botDescription"], *values.Map["botAuthor"])
 
-		if values["licenseType"] != "no-license" && values["licenseType"] != "" {
+		if *values.Map["licenseType"] != "no-license" && *values.Map["licenseType"] != "" {
 			fmt.Fprintf(&readmeContent, `This project is licensed under the %s License - see the [LICENSE](LICENSE) file for details.
-    `, values["licenseType"])
+    `, *values.Map["licenseType"])
 		} else {
 			readmeContent.WriteString(`All rights reserved.`)
 		}
 		fmt.Fprintf(&readmeContent, `
     ## Contributors
 
-- %s`, values["botAuthor"])
+- %s`, *values.Map["botAuthor"])
 
 		readmeContent.WriteString(`
 Bot generated using BotBox - https://github.com/choice404/botbox`)
 
 		_, err = readmeFile.WriteString(readmeContent.String())
 		if err != nil {
-			fmt.Printf("Error writing to README.md file: %v\n", err)
-			return
+			return fmt.Errorf("error writing to README.md file: %w", err)
 		}
 
 	} else if err == nil && !readmeOpt {
 		fmt.Println("Not overriding README.md file.")
 	} else {
-		fmt.Printf("Error creating README.md file: %v\n", err)
-		return
+		return fmt.Errorf("error creating README.md file: %w", err)
 	}
 
-	if values["licenseType"] != "no-license" && values["licenseType"] != "" {
+	if *values.Map["licenseType"] != "no-license" && *values.Map["licenseType"] != "" {
 		if licenseOpt, err := CreateFileOption(filepath.Join(rootDir, "LICENSE")); err == nil && licenseOpt {
 			licenseFile, err := os.Create(filepath.Join(rootDir, "LICENSE"))
 			if err != nil {
-				fmt.Printf("Error creating LICENSE file: %v\n", err)
-				return
+				return fmt.Errorf("Error creating LICENSE file: %v\n", err)
 			}
 			defer licenseFile.Close()
-			LicenseText, err := FetchLicense(values["licenseType"])
+			LicenseText, err := FetchLicense(*values.Map["licenseType"])
 
 			if err != nil {
-				fmt.Printf("Error fetching license text: %v\n", err)
-				return
+				return fmt.Errorf("Error fetching license %s: %v\n", *values.Map["licenseType"], err)
 			}
 
 			_, err = fmt.Fprint(licenseFile, LicenseText)
 			if err != nil {
-				fmt.Printf("Error writing to LICENSE file: %v\n", err)
-				return
+				return fmt.Errorf("Error writing to LICENSE file: %v\n", err)
 			}
 		} else if err == nil && !licenseOpt {
 			fmt.Println("Not overriding LICENSE file.")
 		} else {
-			fmt.Printf("Error creating LICENSE file: %v\n", err)
-			return
+			return fmt.Errorf("Error creating LICENSE file: %v\n", err)
 		}
 	}
 
-	if values["envChoice"] == "doppler" {
+	if *values.Map["envChoice"] == "doppler" {
 		if dopplerOpt, err := CreateFileOption(filepath.Join(rootDir, "doppler.yaml")); err == nil && dopplerOpt {
 			dopplerFile, err := os.Create(filepath.Join(rootDir, "doppler.yaml"))
 			if err != nil {
-				fmt.Printf("Error creating doppler.yaml file: %v\n", err)
-				return
+				return fmt.Errorf("Error creating doppler.yaml file: %v\n", err)
 			}
 			defer dopplerFile.Close()
 			_, err = fmt.Fprintf(dopplerFile, `setup:
   - project: %s
     config: %s
-`, values["botTokenDopplerProject"], values["botGuildDopplerEnv"])
+`, *values.Map["botTokenDopplerProject"], *values.Map["botGuildDopplerEnv"])
 		} else if err == nil && !dopplerOpt {
 			fmt.Println("Not overriding doppler.yaml file.")
 		} else {
-			fmt.Printf("Error creating doppler.yaml file: %v\n", err)
-			return
+			return fmt.Errorf("Error creating doppler.yaml file: %v\n", err)
 		}
-	} else if values["envChoice"] == "env" {
+	} else if *values.Map["envChoice"] == "env" {
 		if envOpt, err := CreateFileOption(filepath.Join(rootDir, ".env")); err == nil && envOpt {
 			envFile, err := os.Create(filepath.Join(rootDir, ".env"))
 			if err != nil {
-				fmt.Printf("Error creating .env file: %v\n", err)
-				return
+				return fmt.Errorf("Error creating .env file: %v\n", err)
 			}
 			defer envFile.Close()
 			_, err = fmt.Fprintf(envFile, `DISCORD_TOKEN=%s
 DISCORD_GUILD=%s
-`, values["botTokenDopplerProject"], values["botGuildDopplerEnv"])
+`, *values.Map["botTokenDopplerProject"], *values.Map["botGuildDopplerEnv"])
 			if err != nil {
-				fmt.Printf("Error writing to .env file: %v\n", err)
-				return
+				return fmt.Errorf("Error writing to .env file: %v\n", err)
 			}
 		} else if err == nil && !envOpt {
 			fmt.Println("Not overriding .env file.")
 		} else {
-			fmt.Printf("Error creating .env file: %v\n", err)
-			return
+			return fmt.Errorf("Error creating .env file: %v\n", err)
 		}
-	} else if values["envChoice"] == "none" {
+	} else if *values.Map["envChoice"] == "none" {
 		fmt.Println("No environment file will be created.")
 	} else {
-		fmt.Println("Invalid environment choice.")
-		return
+		return fmt.Errorf("Invalid environment choice: %s", *values.Map["envChoice"])
 	}
 
 	if runOpt, err := CreateFileOption(filepath.Join(rootDir, "run.sh")); err == nil && runOpt {
 		runFile, err := os.Create(filepath.Join(rootDir, "run.sh"))
 		if err != nil {
-			fmt.Printf("Error creating run.sh file: %v\n", err)
-			return
+			return fmt.Errorf("Error creating run.sh file: %v\n", err)
 		}
 		defer runFile.Close()
 
@@ -418,7 +412,7 @@ DISCORD_GUILD=%s
 
 `)
 
-		if values["envChoice"] == "doppler" {
+		if *values.Map["envChoice"] == "doppler" {
 			runScriptContent.WriteString("doppler run -- \\\n")
 		}
 		runScriptContent.WriteString(`python3 src/main.py
@@ -428,26 +422,22 @@ DISCORD_GUILD=%s
 		_, err = fmt.Fprint(runFile, runScriptContent.String())
 
 		if err != nil {
-			fmt.Printf("Error writing to run.sh file: %v\n", err)
-			return
+			return fmt.Errorf("Error writing to run.sh file: %v\n", err)
 		}
 		err = os.Chmod(filepath.Join(rootDir, "run.sh"), 0755)
 		if err != nil {
-			fmt.Printf("Error setting permissions for run.sh file: %v\n", err)
-			return
+			return fmt.Errorf("Error setting permissions for run.sh file: %v\n", err)
 		}
 	} else if err == nil && !runOpt {
 		fmt.Println("Not overriding run.sh file.")
 	} else {
-		fmt.Printf("Error creating run.sh file: %v\n", err)
-		return
+		return fmt.Errorf("Error creating run.sh file: %v\n", err)
 	}
 
 	if mainOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "main.py")); err == nil && mainOpt {
 		mainFile, err := os.Create(filepath.Join(rootDir, "src", "main.py"))
 		if err != nil {
-			fmt.Printf("Error creating main.py file: %v\n", err)
-			return
+			return fmt.Errorf("Error creating main.py file: %v\n", err)
 		}
 		defer mainFile.Close()
 		_, err = fmt.Fprintf(mainFile, `"""
@@ -528,23 +518,20 @@ if __name__ == '__main__':
 
 """
 File generated by BotBox - https://github.com/choice404/botbox
-"""`, values["botAuthor"], values["botName"], values["botDescription"])
+"""`, *values.Map["botAuthor"], *values.Map["botName"], *values.Map["botDescription"])
 		if err != nil {
-			fmt.Printf("Error writing to main.py file: %v\n", err)
-			return
+			return fmt.Errorf("Error writing to main.py file: %v\n", err)
 		}
 		err = os.Chmod(filepath.Join(rootDir, "src", "main.py"), 0755)
 		if err != nil {
-			fmt.Printf("Error setting permissions for main.py file: %v\n", err)
-			return
+			return fmt.Errorf("Error setting permissions for main.py file: %v\n", err)
 		}
 	}
 
 	if helloWorldOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "cogs", "helloWorld.py")); err == nil && helloWorldOpt {
 		helloWorldFile, err := os.Create(filepath.Join(rootDir, "src", "cogs", "helloWorld.py"))
 		if err != nil {
-			fmt.Printf("Error creating helloWorld.py file: %v\n", err)
-			return
+			return fmt.Errorf("Error creating helloWorld.py file: %v\n", err)
 		}
 		defer helloWorldFile.Close()
 		_, err = fmt.Fprintf(helloWorldFile, `"""
@@ -595,24 +582,21 @@ async def setup(bot):
 
 """
 File generated by BotBox - https://github.com/choice404/botbox
-"""`, values["botAuthor"], values["botName"], values["botDescription"])
+"""`, *values.Map["botAuthor"], *values.Map["botName"], *values.Map["botDescription"])
 
 		if err != nil {
-			fmt.Printf("Error writing to helloWorld.py file: %v\n", err)
-			return
+			return fmt.Errorf("Error writing to helloWorld.py file: %v\n", err)
 		}
 		err = os.Chmod(filepath.Join(rootDir, "src", "cogs", "helloWorld.py"), 0755)
 		if err != nil {
-			fmt.Printf("Error setting permissions for helloWorld.py file: %v\n", err)
-			return
+			return fmt.Errorf("Error setting permissions for helloWorld.py file: %v\n", err)
 		}
 	}
 
 	if cogsOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "cogs", "cogs.py")); err == nil && cogsOpt {
 		cogsFile, err := os.Create(filepath.Join(rootDir, "src", "cogs", "cogs.py"))
 		if err != nil {
-			fmt.Printf("Error creating cogs.py file: %v\n", err)
-			return
+			return fmt.Errorf("Error creating cogs.py file: %v\n", err)
 		}
 		defer cogsFile.Close()
 		_, err = fmt.Fprintf(cogsFile, `"""
@@ -788,28 +772,25 @@ async def setup(bot):
 
 """
 File generated by BotBox - https://github.com/choice404/botbox
-"""`, values["botAuthor"], values["botName"], values["botDescription"])
+"""`, *values.Map["botAuthor"], *values.Map["botName"], *values.Map["botDescription"])
 
 		if err != nil {
-			fmt.Printf("Error writing to cogs.py file: %v\n", err)
-			return
+			return fmt.Errorf("Error writing to cogs.py file: %v\n", err)
 		}
 		err = os.Chmod(filepath.Join(rootDir, "src", "cogs", "cogs.py"), 0755)
 		if err != nil {
-			fmt.Printf("Error setting permissions for cogs.py file: %v\n", err)
-			return
+			return fmt.Errorf("Error setting permissions for cogs.py file: %v\n", err)
 		}
 	}
 
 	if initOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "cogs", "__init__.py")); err == nil && initOpt {
 		_, err := os.Create(filepath.Join(rootDir, "src", "cogs", "__init__.py"))
 		if err != nil {
-			fmt.Printf("Error creating __init__.py file: %v\n", err)
-			return
+			return fmt.Errorf("error creating __init__.py file: %w", err)
 		}
 	}
 
-	fmt.Println("Project structure created successfully!")
+	return nil
 }
 
 func CreateFileOption(filename string) (bool, error) {
@@ -906,6 +887,69 @@ func argExists(argName string, args []ArgInfo) bool {
 		}
 	}
 	return false
+}
+
+func SetLocalConfigValue(key string, value any) error {
+	rootDir, err := FindBotConf()
+	if err != nil {
+		return fmt.Errorf("not in a botbox project: %w", err)
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	switch key {
+	case "bot.name":
+		if str, ok := value.(string); ok {
+			config.BotInfo.Name = str
+		} else {
+			return fmt.Errorf("bot.name must be a string")
+		}
+	case "bot.description":
+		if str, ok := value.(string); ok {
+			config.BotInfo.Description = str
+		} else {
+			return fmt.Errorf("bot.description must be a string")
+		}
+	case "bot.command_prefix":
+		if str, ok := value.(string); ok {
+			config.BotInfo.CommandPrefix = str
+		} else {
+			return fmt.Errorf("bot.command_prefix must be a string")
+		}
+	case "bot.author":
+		if str, ok := value.(string); ok {
+			config.BotInfo.Author = str
+		} else {
+			return fmt.Errorf("bot.author must be a string")
+		}
+	default:
+		return fmt.Errorf("invalid local config key: %s", key)
+	}
+
+	return saveConfig(rootDir, config)
+}
+
+func GetLocalConfigValue(key string) (any, error) {
+	config, err := LoadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	switch key {
+	case "bot.name":
+		return config.BotInfo.Name, nil
+	case "bot.description":
+		return config.BotInfo.Description, nil
+	case "bot.command_prefix":
+		return config.BotInfo.CommandPrefix, nil
+	case "bot.author":
+		return config.BotInfo.Author, nil
+	default:
+		return nil, fmt.Errorf("invalid local config key: %s", key)
+	}
 }
 
 /*
