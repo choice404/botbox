@@ -380,6 +380,7 @@ Bot generated using BotBox - https://github.com/choice404/botbox`)
 			defer envFile.Close()
 			_, err = fmt.Fprintf(envFile, `DISCORD_TOKEN=%s
 DISCORD_GUILD=%s
+ENVIRONMENTS=production,development
 `, *values.Map["botTokenDopplerProject"], *values.Map["botGuildDopplerEnv"])
 			if err != nil {
 				return fmt.Errorf("Error writing to .env file: %v\n", err)

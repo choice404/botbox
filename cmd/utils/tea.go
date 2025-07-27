@@ -495,6 +495,18 @@ func (m Model) View() string {
 		return s.Base.Render(header + "\n" + message + "\n\n" + versionMessage + "\n\n")
 	default:
 		v := strings.TrimSuffix(m.currentForm.View(), "\n\n")
+
+		lines := strings.Split(v, "\n")
+		if m.viewportOffset > 0 && len(lines) > m.viewportHeight {
+			startLine := m.viewportOffset
+			endLine := min(m.viewportOffset+m.viewportHeight, len(lines))
+			if startLine < len(lines) {
+				v = strings.Join(lines[startLine:endLine], "\n")
+			}
+		} else if len(lines) > m.viewportHeight {
+			v = strings.Join(lines[:m.viewportHeight], "\n")
+		}
+
 		form := m.lg.NewStyle().Margin(1, 0).Render(v)
 
 		errors := m.currentForm.Errors()
@@ -510,8 +522,21 @@ func (m Model) View() string {
 			footer = m.appErrorBoundaryView("")
 		}
 
+		// NOTE: Uncomment to enable scrolling functionality
+		// scrollIndicator := ""
+		// maxOffset := m.getMaxViewportOffset()
+		// if maxOffset > 0 {
+		// 	scrollIndicator = s.Help.Render(fmt.Sprintf("↑/↓ to scroll (line %d-%d of %d)",
+		// 		m.viewportOffset+1,
+		// 		int(math.Min(float64(m.viewportOffset+m.viewportHeight), float64(len(strings.Split(strings.TrimSuffix(m.currentForm.View(), "\n\n"), "\n"))))),
+		// 		len(strings.Split(strings.TrimSuffix(m.currentForm.View(), "\n\n"), "\n"))))
+		// }
+
 		return s.Base.Render(header + "\n" + body + "\n\n" +
-			footer + "\n" + "\n\n" + s.Highlight.Render("BotBox Version: "+Version) + "\n\n")
+			footer + "\n" +
+			// NOTE: Uncomment to enable scrolling functionality
+			// scrollIndicator +
+			"\n\n" + s.Highlight.Render("BotBox Version: "+Version) + "\n\n")
 	}
 }
 

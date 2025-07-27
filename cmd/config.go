@@ -20,7 +20,7 @@ var (
 
 	configCmd = &cobra.Command{
 		Use:   "config [sections...]",
-		Short: "Disoplay configuration",
+		Short: "Display configuration",
 		Long:  `Display local project configuration or global BotBox CLI configuration`,
 		Run: func(cmd *cobra.Command, args []string) {
 			var configModel utils.Model
