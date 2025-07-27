@@ -410,21 +410,22 @@ This will:
 -   [ ] Add a proper changelog
 -   [ ] New commands:
     -   [ ] `botbox edit` command for modifying existing cogs/commands.
-    -   [ ] `botbox project migrate` for migrating between major versions.
+    -   [x] `botbox project update` for migrating between major versions.
 -   [ ] Advanced dynamic bot building:
-    -   [ ] Create cogs containing "blocks" that can be dynamically added and connected for complex functionality.
+    -   [ ] Create cogs containing "blocks" that can be dynamically added and connected for complex functionality through BotBox.
 -   [ ] Enhanced project templates and scaffolding options.
 
 ---
 
 ## 📜 Version History
 
+-   **2.5.2** Fixed a bit with the huh/tea display since long Huh.Groups won't display everything properly. Updated copyright and licenses in each file and updated command descriptions
 -   **2.5.1** Made the final view in the custom tea/huh form manager scrollable (This is enabled regardless of scroll_enabled status in the global config for long content)
 -   **2.5.0**: Added global CLI configuration system, comprehensive config management commands (`botbox config set/get/list` with `-l/-g` flags), automatic update checking and updating capabilities, project configuration upgrade system (`botbox project upgrade`), and improved configuration synchronization.
 -   **2.4.1**: Updated the cli to use the alt screen buffer through Bubble Tea
--   **2.4.0**: Wrapped all of the Huh forms in Tea for more complex functionality and smoother UX. Updated configuration to be more detailed and added more functionality for development.
+-   **2.4.0**: Wrapped all the Huh forms in Tea for more complex functionality and smoother UX. Updated configuration to be more detailed and added more functionality for development.
 -   **2.3.2**: Updated the add command so that the confirmation for command information is displayed properly
--   **2.3.1**: Fixed up some small stuff in the file generation here and there, version numberring, etc.
+-   **2.3.1**: Fixed up some small stuff in the file generation here and there, version numbering, etc.
 -   **2.3.0**: Added `remove` command; updated `botbox.conf` schema; improved prefix command generation support.
 -   **2.2.6**: Fixed `add` command bug; added MIT license to generated files; updated project template.
 -   **2.2.4**: Improved `README.md` generation; token input is now hidden.
