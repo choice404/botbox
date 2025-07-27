@@ -17,32 +17,23 @@ var (
 	GlobalConfig *utils.GlobalConfig
 )
 
-// rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "botbox",
-	Short: "A CLI tool to help create and manage a cog based discord.py bot",
-	Long: ` A discord bot template generator to help create discord
-bots quickly and easily. Forget about the boilerplate
-and focus on what really matters, what your bot will do.
+	Short: "A powerful CLI tool for Discord bot development",
+	Long: `BotBox is a comprehensive CLI tool that helps you scaffold, configure, and manage 
+Discord bot projects quickly and efficiently. It provides automated cog generation, 
+project initialization, configuration management, and built-in utilities to streamline 
+your Discord bot development workflow.
 
-Bot Box is built using Golang, Cobra, Bubble Tea, and Huh,
-offering an intuitive cli tool to quickly build
-Discord bot projects. It includes a cog-based architecture, ` +
-		"`.env`" + ` management, and built-in utilities for automating
-bot configuration and extension development.
-`,
+Built with a cog-based architecture for modularity and featuring automatic updates, 
+global configuration management, and seamless project upgrades.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if cmd.Name() != "update" {
 			checkForUpdatesIfEnabled()
 		}
 	},
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute(version string) {
 	rootCmd.Version = version
 	utils.SetVersion(rootCmd.Version)

@@ -1,24 +1,8 @@
 /*
-Copyright © 2025 Austin "Choice404" Choi
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+Copyright © 2025 Austin Choi austinch20@protonmail.com
+See end of file for extended copyright information
 */
+
 package cmd
 
 import (
@@ -31,13 +15,18 @@ import (
 
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "Synchronize cog configuration with actual cog files",
+	Long: `Synchronize the botbox.conf file with the actual cog files in your project.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+This command analyzes your src/cogs/ directory and updates the configuration to:
+  - Add newly created cog files that aren't in the configuration
+  - Remove configuration entries for deleted cog files  
+  - Update command information by parsing cog file contents
+  - Fix inconsistencies between code and configuration
+
+Use this command when you've manually added/removed cogs or when the 
+configuration seems out of sync with your actual project structure. 
+It ensures your bot will load all available cogs correctly.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		model := utils.ConfigSyncModel(configCallback, configSyncInitCallback)
 		utils.CupSleeve(model)

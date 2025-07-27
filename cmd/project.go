@@ -1,24 +1,8 @@
 /*
-Copyright © 2025 Austin "Choice404" Choi
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+Copyright © 2025 Austin Choi austinch20@protonmail.com
+See end of file for extended copyright information
 */
+
 package cmd
 
 import (
@@ -36,22 +20,19 @@ var projectCmd = &cobra.Command{
 
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
-	Short: "Upgrade botbox.conf to the latest schema",
+	Short: "Upgrade project configuration to the latest schema",
 	Long: `Upgrade your botbox.conf file to the latest schema format.
 
-This command will:
-1. Read your existing botbox.conf file
-2. Parse your cog files to extract detailed command information
-3. Create a backup of your original config
-4. Upgrade the configuration to the latest schema format
+This command handles migration between Bot Box versions by:
+  1. Analyzing your current botbox.conf format
+  2. Parsing cog files to extract detailed command information
+  3. Creating a backup of your original configuration
+  4. Converting legacy formats to the modern schema
+  5. Preserving all existing settings and preferences
 
-The upgrade process will attempt to preserve all existing configuration
-while adding missing fields and converting legacy command arrays to
-the new CommandInfo format.
-
-Examples:
-  botbox project upgrade                # Upgrade current project config
-`,
+The upgrade process is safe and reversible - your original configuration 
+is backed up before any changes are made. This ensures compatibility 
+with the latest Bot Box features and command structures.`,
 	RunE: runConfigUpgrade,
 }
 

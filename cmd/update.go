@@ -1,24 +1,8 @@
 /*
-Copyright © 2025 Austin "Choice404" Choi
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+Copyright © 2025 Austin Choi austinch20@protonmail.com
+See end of file for extended copyright information
 */
+
 package cmd
 
 import (
@@ -28,20 +12,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// updateCmd represents the update command
 var updateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Update botbox to the latest version",
-	Long: `Update botbox to the latest version from GitHub releases.
+	Short: "Update Bot Box to the latest version",
+	Long: `Update Bot Box CLI to the latest version from GitHub releases.
 
 This command will:
-1. Check for the latest release on GitHub
-2. Download and install the update using go install
-3. Clean the module cache to ensure a fresh installation
+  1. Check GitHub for the latest Bot Box release
+  2. Compare with your current version
+  3. Download and install the update using 'go install'
+  4. Clean the module cache for a fresh installation
+  5. Display release notes and changelog information
 
-Examples:
-  botbox update                    # Update to latest version
-`,
+The update process is automatic and handles all necessary cleanup. 
+After updating, you may need to restart your terminal or run 'hash -r' 
+to refresh the command cache.
+
+Bot Box can also check for updates automatically based on your global 
+configuration settings (cli.check_updates and cli.auto_update).`,
 	RunE: runUpdate,
 }
 

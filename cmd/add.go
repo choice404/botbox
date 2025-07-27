@@ -21,11 +21,20 @@ var (
 )
 
 var addCmd = &cobra.Command{
-	Use:   "add",
-	Short: "Adds new cog to the project",
-	Long: `This command allows you to add a new cog to your bot project.
-You can specify the cog structure as well as create commands for the cog.
-`,
+	Use:   "add [cog-name]",
+	Short: "Add a new cog to the current Bot Box project",
+	Long: `Add a new cog (command module) to your Bot Box project with an interactive setup.
+
+This command guides you through creating a new cog by specifying:
+  - Cog name and file structure
+  - Slash commands with descriptions and arguments
+  - Prefix commands for traditional bot interactions
+  - Command argument types and return values
+  - Command scopes (guild or global)
+
+The generated cog will be automatically registered in botbox.conf and include 
+proper Discord.py boilerplate code. It's recommended to use this command instead 
+of manually creating cogs to ensure proper integration.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, err := utils.FindBotConf()
 		if err != nil {

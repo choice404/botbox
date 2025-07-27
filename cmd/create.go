@@ -16,24 +16,21 @@ import (
 )
 
 var createCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Creates a new Bot Box project",
-	Long: `Creates a directory containing a new Bot Box project.
-  The project directory will contain the following file structure:
+	Use:   "create [project-name]",
+	Short: "Create a new Bot Box project in a new directory",
+	Long: `Create a new Bot Box project with a complete directory structure and initial files.
 
-  projectName/
-  |- README.md
-  |- botbox.conf
-  |- run.sh
-  |- LICENSE (optional)
-  |- doppler.yaml (optional)
-  |- src/
-     |- main.py
-     |- cogs/
-        |- __init__.py
-        |- helloWorld.py
-        |- cogs.py
-  `,
+This command will prompt you for project details (bot name, prefix, author, etc.) and 
+generate a new project directory containing:
+  - README.md with project documentation
+  - botbox.conf configuration file
+  - run.sh execution script
+  - LICENSE file (optional)
+  - Environment configuration (.env or doppler.yaml)
+  - src/ directory with main.py and initial cogs
+
+The project will include a demo HelloWorld cog and a CogManagement cog for dynamic 
+cog loading/unloading during development.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		var createNewProject bool
 		botBoxExistsForm := huh.NewForm(

@@ -12,23 +12,18 @@ import (
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initializes a Bot Box project",
-	Long: `Initializes a Bot Box project in the current directory and prompts the user for information about the bot as well as setup other default configurations in a botbox.conf file.
-  Will also create the initial project strucutre:
+	Short: "Initialize a Bot Box project in the current directory",
+	Long: `Initialize a Bot Box project in the current working directory.
 
-  /
-  |- README.md
-  |- botbox.conf
-  |- run.sh
-  |- LICENSE (optional)
-  |- doppler.yaml (optional)
-  |- src/
-     |- main.py
-     |- cogs/
-        |- __init__.py
-        |- helloWorld.py (demo cog)
-        |- cogs.py
-`,
+This command creates the same project structure as 'create' but uses the current 
+directory instead of creating a new one. It will prompt for bot configuration 
+details and generate all necessary files:
+  - Project configuration and documentation
+  - Source code structure with example cogs
+  - Environment setup files
+  - Execution scripts
+
+Use this when you want to set up a Bot Box project in an existing directory.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		model := utils.CreateModel(CreateProjectInitCallback)
 		utils.CupSleeve(model)

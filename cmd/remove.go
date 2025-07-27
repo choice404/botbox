@@ -22,11 +22,18 @@ var (
 )
 
 var removeCmd = &cobra.Command{
-	Use:   "remove",
-	Short: "Remove a cog from the project",
-	Long: ` This command allows you to remove a specific cog from your bot project.
-You can specify the cog to remove by providing its name as an argument or select it from a list of available cogs.
-  `,
+	Use:   "remove [cog-name]",
+	Short: "Remove a cog from the current Bot Box project",
+	Long: `Remove an existing cog from your Bot Box project.
+
+This command will:
+  - Display a list of available cogs to choose from
+  - Remove the selected cog file from the src/cogs/ directory
+  - Update the botbox.conf configuration to remove the cog entry
+  - Maintain project consistency by cleaning up all references
+
+You can specify the cog name as an argument or select from an interactive list. 
+The command ensures safe removal without breaking your project configuration.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, err := utils.FindBotConf()
 		if err != nil {

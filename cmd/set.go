@@ -1,24 +1,8 @@
 /*
-Copyright © 2025 Austin "Choice404" Choi
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+Copyright © 2025 Austin Choi austinch20@protonmail.com
+See end of file for extended copyright information
 */
+
 package cmd
 
 import (
@@ -34,26 +18,26 @@ var (
 	setLocal  bool
 )
 
-// setCmd represents the set command
 var setCmd = &cobra.Command{
 	Use:   "set <key> <value>",
 	Short: "Set a configuration value",
 	Long: `Set a configuration value using dot notation for nested keys.
 
-Global config keys (use -g flag):
-  cli.check_updates, cli.auto_update
-  user.default_user, user.github_username
-  display.scroll_enabled, display.color_scheme
-  defaults.command_prefix, defaults.auto_git_init
-  dev.editor
+Local configuration (default):
+  - Modify bot settings like name, description, prefix, and author
+  - Changes are saved to the project's botbox.conf file
 
-Local config keys (default, or use -l flag):
-  bot.name, bot.description, bot.command_prefix, bot.author
+Global configuration (use -g flag):
+  - Update CLI preferences and default values
+  - Configure update behavior and development tools
+  - Set user information for new projects
+
+Boolean values accept: true/false, t/f, yes/no, y/n, 1/0
 
 Examples:
-  botbox config set bot.name "My Bot"                    # local (default)
-  botbox config set -l bot.author "John Doe"            # local (explicit)
-  botbox config set -g user.default_user "john_doe"     # global`,
+  botbox config set bot.name "My Awesome Bot"           # Set local bot name
+  botbox config set -g cli.auto_update true            # Enable auto-updates
+  botbox config set -l bot.command_prefix "!"          # Set local prefix`,
 	Args: cobra.ExactArgs(2),
 	RunE: runConfigSet,
 }
