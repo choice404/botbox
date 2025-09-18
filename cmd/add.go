@@ -95,7 +95,7 @@ import os
 load_dotenv()
 
 GUILD_ID = int(os.getenv("GUILD_ID", 0))
-GUILD = discord.Object(id=GUILD_ID) if GUILD_ID else None
+GUILD = discord.Object(id=GUILD_ID)
 
 class %s(commands.Cog, name="%s"):
     def __init__(self, bot) -> None:
@@ -105,6 +105,8 @@ class %s(commands.Cog, name="%s"):
 
 	for _, command := range slashCommandList {
 		fullArgStr := buildArgString(command.Args)
+
+		cmdNameUnderscore := strings.ReplaceAll(command.Name, "-", "_")
 
 		fmt.Fprintf(&cogContent, `
     @app_commands.command(name="%s", description="%s")`, command.Name, command.Description)
@@ -124,7 +126,7 @@ class %s(commands.Cog, name="%s"):
 
 		if command.Scope == "guild" {
 			fmt.Fprintf(&cogContent, `
-    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions`)
+    @app_commands.guilds(GUILD)`)
 		}
 
 		fmt.Fprintf(&cogContent, `
@@ -132,7 +134,7 @@ class %s(commands.Cog, name="%s"):
         """
         %s when the user types "/%s"
 
-            Parameters:`, command.Name, fullArgStr, command.ReturnType, command.Description, command.Name)
+            Parameters:`, cmdNameUnderscore, fullArgStr, command.ReturnType, command.Description, command.Name)
 
 		for _, arg := range command.Args {
 			fmt.Fprintf(&cogContent, `

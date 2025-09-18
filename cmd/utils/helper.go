@@ -449,7 +449,7 @@ Bot Author: %s
 """
 
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 from dotenv import load_dotenv
 import os
 import json
@@ -552,15 +552,15 @@ import os
 
 load_dotenv()
 
-GUILD_ID = os.getenv('DISCORD_GUILD')
-GUILD = discord.Object(id=GUILD_ID) if GUILD_ID else None
+GUILD_ID = os.getenv('DISCORD_GUILD', 0)
+GUILD = discord.Object(id=GUILD_ID)
 
 class HelloWorld(commands.Cog):
     def __init__(self, bot) -> None:
         self.bot = bot
 
     @app_commands.command(name="hello", description="Bot responds with world")
-    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
+    @app_commands.guilds(GUILD)
     async def hello(self, interaction: discord.Interaction) -> None:
         """
         Bot responds with "world" when the user types "/hello"
@@ -614,8 +614,10 @@ from dotenv import load_dotenv
 import json
 import os
 
+load_dotenv()
+
 GUILD_ID = int(os.getenv("GUILD_ID", 0))
-GUILD = discord.Object(id=GUILD_ID) if GUILD_ID else None
+GUILD = discord.Object(id=GUILD_ID)
 
 class CogManagement(commands.Cog, name="Cog Management"):
     def __init__(self, bot):
@@ -625,7 +627,7 @@ class CogManagement(commands.Cog, name="Cog Management"):
     @app_commands.describe(
         cog_name="The name of the cog to reload (without .py cog)"
     )
-    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
+    @app_commands.guilds(GUILD)
     async def reload_cog(self, interaction: discord.Interaction, cog_name: str) -> None:
         """
         Reloads a cog by name.
@@ -654,7 +656,7 @@ class CogManagement(commands.Cog, name="Cog Management"):
         await self.bot.syncing()
 
     @app_commands.command(name="reload-all-cogs", description="Reloads all cogs")
-    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
+    @app_commands.guilds(GUILD)
     async def reload_all_cogs(self, interaction: discord.Interaction) -> None:
         """
         Reloads all cogs.
@@ -688,7 +690,7 @@ class CogManagement(commands.Cog, name="Cog Management"):
         await self.bot.syncing()
 
     @app_commands.command(name="list-cogs", description="Lists all available cogs")
-    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
+    @app_commands.guilds(GUILD)
     async def list_cogs(self, interaction: discord.Interaction) -> None:
         """
         Lists all available cogs.
@@ -712,7 +714,7 @@ class CogManagement(commands.Cog, name="Cog Management"):
     @app_commands.describe(
         cog_name="The name of the cog to unload (without .py cog)"
     )
-    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
+    @app_commands.guilds(GUILD)
     async def unload_cog(self, interaction: discord.Interaction, cog_name: str) -> None:
         """
         Unloads a cog by name.
@@ -742,7 +744,7 @@ class CogManagement(commands.Cog, name="Cog Management"):
     @app_commands.describe(
         cog_name="The name of the cog to load (without .py cog)"
     )
-    @app_commands.guilds(GUILD) if GUILD else app_commands.default_permissions
+    @app_commands.guilds(GUILD)
     async def load_cog(self, interaction: discord.Interaction, cog_name: str) -> None:
         """
         Loads a cog by name.

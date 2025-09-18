@@ -646,6 +646,9 @@ func addArgInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 					if strings.Contains(s, " ") {
 						return fmt.Errorf("Argument name cannot contain spaces")
 					}
+					if strings.Contains(s, "-") {
+						return fmt.Errorf("Argument name cannot contain dashes")
+					}
 					args, _ := JSONToArgInfoSlice(*values.Map["args"])
 					if argExists(s, args) {
 						return fmt.Errorf("Argument name already exists")
