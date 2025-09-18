@@ -419,6 +419,7 @@ This will:
 
 ## 📜 Version History
 
+-   2.5.3 Fixed issues with project and cog generation. Getting guild info and setting guild scope for slash commands. Added input validation to argument forms to prevent "-" in argument names
 -   **2.5.2** Fixed a bit with the huh/tea display since long Huh.Groups won't display everything properly. Updated copyright and licenses in each file and updated command descriptions
 -   **2.5.1** Made the final view in the custom tea/huh form manager scrollable (This is enabled regardless of scroll_enabled status in the global config for long content)
 -   **2.5.0**: Added global CLI configuration system, comprehensive config management commands (`botbox config set/get/list` with `-l/-g` flags), automatic update checking and updating capabilities, project configuration upgrade system (`botbox project upgrade`), and improved configuration synchronization.
