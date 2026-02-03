@@ -339,7 +339,7 @@ func AddFormWrapperGenerator() []FormWrapper {
 				if *formValues.Map["argStartConfirm"] == "yes" {
 					return -1
 				}
-				return 5
+				return 5 // Go to response info form
 			},
 		}
 		forms = append(forms, wrapper)
@@ -389,6 +389,32 @@ func AddFormWrapperGenerator() []FormWrapper {
 	}
 	{ // NOTE: 5
 		values := map[string]*string{
+			"responseText": new(string),
+			"responseType": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Add Response Info",
+			Form: addResponseInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addResponseInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "response",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentCommand, _ := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+				currentCommand.Response = &ResponseInfo{
+					Text: *formValues.Map["responseText"],
+					Type: *formValues.Map["responseType"],
+				}
+				commandString, _ := currentCommand.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: 6
+		values := map[string]*string{
 			"cmdAcceptConfirm": new(string),
 		}
 		wrapper := FormWrapper{
@@ -424,6 +450,9 @@ func AddFormWrapperGenerator() []FormWrapper {
 					ResetFormValues(targetValues)
 				}
 				if targetFormIndex == 2 {
+					ResetFormValues(targetValues)
+				}
+				if targetFormIndex == 5 {
 					ResetFormValues(targetValues)
 				}
 			},
@@ -564,6 +593,7 @@ func addCmdInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 
 func addCmdAcceptFormGenerator(values Values, modelValues Values) *huh.Form {
 	var commandName, commandType, commandDesc, commandReturn, commandArgs string
+	var responseText, responseType string
 
 	if modelValues.Map["currentCommand"] != nil && *modelValues.Map["currentCommand"] != "" {
 		currentCommand, err := JSONToCmdInfo(*modelValues.Map["currentCommand"])
@@ -582,6 +612,14 @@ func addCmdAcceptFormGenerator(values Values, modelValues Values) *huh.Form {
 			} else {
 				commandArgs = "None"
 			}
+
+			if currentCommand.Response != nil {
+				responseText = currentCommand.Response.Text
+				responseType = currentCommand.Response.Type
+			} else {
+				responseText = "Not set"
+				responseType = "Not set"
+			}
 		}
 	}
 
@@ -589,8 +627,8 @@ func addCmdAcceptFormGenerator(values Values, modelValues Values) *huh.Form {
 		huh.NewGroup(
 			huh.NewNote().
 				Title("Command Info").
-				Description(fmt.Sprintf("Command Name: %s\nCommand Type: %s\nDescription: %s\nReturn Type: %s\nArguments: %v",
-					commandName, commandType, commandDesc, commandReturn, commandArgs)),
+				Description(fmt.Sprintf("Command Name: %s\nCommand Type: %s\nDescription: %s\nReturn Type: %s\nArguments: %v\nResponse Text: %s\nResponse Type: %s",
+					commandName, commandType, commandDesc, commandReturn, commandArgs, responseText, responseType)),
 			huh.NewConfirm().
 				Title("Does everything look correct?").
 				Affirmative("yes").
@@ -688,6 +726,41 @@ func addArgInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 		),
 	)
 	return argInfoForm
+}
+
+func addResponseInfoFormGenerator(values Values, modelValues Values) *huh.Form {
+	responseInfoForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Value(values.Map["responseText"]).
+				Title("Enter the response text").
+				Prompt("> ").
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("response text cannot be empty")
+					}
+					return nil
+				}),
+			huh.NewSelect[string]().
+				Value(values.Map["responseType"]).
+				Title("Select the response type").
+				Options(
+					huh.NewOption("ephemeral (only visible to user)", "ephemeral"),
+					huh.NewOption("regular (visible to all)", "regular"),
+					huh.NewOption("embed (rich embed message)", "embed"),
+				).
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("response type cannot be empty")
+					}
+					if s != "ephemeral" && s != "regular" && s != "embed" {
+						return fmt.Errorf("response type must be one of ephemeral, regular, embed")
+					}
+					return nil
+				}),
+		),
+	)
+	return responseInfoForm
 }
 
 /**

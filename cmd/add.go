@@ -148,13 +148,13 @@ class %s(commands.Cog, name="%s"):
         """
 
         try:
-            await interaction.response.send_message(f"%s", ephemeral=True)
+%s
         except Exception as e:
             print(f"Error: {e}")
             await interaction.response.send_message(f"Error: {e}", ephemeral=True)
 
         return %s
-`, command.ReturnType, command.Name, getReturnValue(command.ReturnType))
+`, command.ReturnType, generateSlashResponse(command), getReturnValue(command.ReturnType))
 	}
 
 	for _, command := range prefixCommandList {
@@ -181,13 +181,13 @@ class %s(commands.Cog, name="%s"):
         """
 
         try:
-            await ctx.send(f"%s", ephemeral=True)
+%s
         except Exception as e:
             print(f"Error: {e}")
             await ctx.send(f"Error: {e}", ephemeral=True)
 
         return %s
-`, command.ReturnType, command.Name, getReturnValue(command.ReturnType))
+`, command.ReturnType, generatePrefixResponse(command), getReturnValue(command.ReturnType))
 	}
 
 	fmt.Fprintf(&cogContent, `
@@ -311,6 +311,50 @@ func buildArgString(args []utils.ArgInfo) string {
 		}
 	}
 	return argBuilder.String()
+}
+
+func generateSlashResponse(command utils.CommandInfo) string {
+	responseText := command.Name
+	responseType := "ephemeral"
+
+	if command.Response != nil {
+		responseText = command.Response.Text
+		responseType = command.Response.Type
+	}
+
+	switch responseType {
+	case "ephemeral":
+		return fmt.Sprintf(`            await interaction.response.send_message(f"%s", ephemeral=True)`, responseText)
+	case "regular":
+		return fmt.Sprintf(`            await interaction.response.send_message(f"%s")`, responseText)
+	case "embed":
+		return fmt.Sprintf(`            embed = discord.Embed(description=f"%s")
+            await interaction.response.send_message(embed=embed)`, responseText)
+	default:
+		return fmt.Sprintf(`            await interaction.response.send_message(f"%s", ephemeral=True)`, responseText)
+	}
+}
+
+func generatePrefixResponse(command utils.CommandInfo) string {
+	responseText := command.Name
+	responseType := "ephemeral"
+
+	if command.Response != nil {
+		responseText = command.Response.Text
+		responseType = command.Response.Type
+	}
+
+	switch responseType {
+	case "ephemeral":
+		return fmt.Sprintf(`            await ctx.send(f"%s", ephemeral=True)`, responseText)
+	case "regular":
+		return fmt.Sprintf(`            await ctx.send(f"%s")`, responseText)
+	case "embed":
+		return fmt.Sprintf(`            embed = discord.Embed(description=f"%s")
+            await ctx.send(embed=embed)`, responseText)
+	default:
+		return fmt.Sprintf(`            await ctx.send(f"%s", ephemeral=True)`, responseText)
+	}
 }
 
 func init() {

@@ -103,6 +103,11 @@ type Config struct {
 	Cogs    []CogConfig  `json:"cogs"`
 }
 
+type ResponseInfo struct {
+	Text string `json:"text"`
+	Type string `json:"type"` // "ephemeral", "regular", "embed"
+}
+
 type CommandInfo struct {
 	Name        string
 	Scope       string
@@ -110,6 +115,7 @@ type CommandInfo struct {
 	Description string
 	Args        []ArgInfo
 	ReturnType  string
+	Response    *ResponseInfo
 }
 
 func CmdInfoSliceToJSON(slice []CommandInfo) (string, error) {

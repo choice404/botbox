@@ -58,7 +58,11 @@ func CreateProject(rootDir string, values Values) error {
           "Type": "slash",
           "Description": "Bot responds with world",
           "Args": null,
-          "ReturnType": "None"
+          "ReturnType": "None",
+          "Response": {
+            "text": "world",
+            "type": "ephemeral"
+          }
         }
       ],
       "prefix_commands": []
@@ -80,7 +84,11 @@ func CreateProject(rootDir string, values Values) error {
             "Description": "The name of the cog to reload (without .py cog)"
           }
           ],
-          "ReturnType": "None"
+          "ReturnType": "None",
+          "Response": {
+            "text": "Reloaded {cog_name}",
+            "type": "ephemeral"
+          }
         },
         {
           "Name": "reload-all-cogs",
@@ -88,7 +96,11 @@ func CreateProject(rootDir string, values Values) error {
           "Type": "slash",
           "Description": "Reloads all cogs",
           "Args": null,
-          "ReturnType": "None"
+          "ReturnType": "None",
+          "Response": {
+            "text": "Reloaded all cogs",
+            "type": "ephemeral"
+          }
         },
         {
           "Name": "list-cogs",
@@ -96,7 +108,11 @@ func CreateProject(rootDir string, values Values) error {
           "Type": "slash",
           "Description": "Lists all available cogs",
           "Args": null,
-          "ReturnType": "None"
+          "ReturnType": "None",
+          "Response": {
+            "text": "Available cogs listed",
+            "type": "ephemeral"
+          }
         },
         {
           "Name": "unload-cog",
@@ -110,7 +126,11 @@ func CreateProject(rootDir string, values Values) error {
             "Description": "The name of the cog to unload (without .py cog)"
           }
           ],
-          "ReturnType": "None"
+          "ReturnType": "None",
+          "Response": {
+            "text": "Unloaded {cog_name}",
+            "type": "ephemeral"
+          }
         },
         {
           "Name": "load-cog",
@@ -124,7 +144,11 @@ func CreateProject(rootDir string, values Values) error {
             "Description": "The name of the cog to load (without .py cog)"
           }
           ],
-          "ReturnType": "None"
+          "ReturnType": "None",
+          "Response": {
+            "text": "Loaded {cog_name}",
+            "type": "ephemeral"
+          }
         }
       ],
       "prefix_commands": []

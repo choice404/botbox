@@ -123,6 +123,10 @@ func convertLegacyCommands(commandNames []string, commandType string) []CommandI
 			Description: fmt.Sprintf("Legacy %s command", commandType),
 			Args:        nil,
 			ReturnType:  "None",
+			Response: &ResponseInfo{
+				Text: name,
+				Type: "ephemeral",
+			},
 		}
 		commands = append(commands, cmd)
 	}
