@@ -6,43 +6,60 @@ See end of file for extended copyright information
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"time"
 )
 
-var (
-	Version string
-)
-
-func SetVersion(version string) {
-	Version = version
-}
-
-func Banner() {
-	fmt.Println(`
-    ____        __     ____
-   / __ )____  / /_   / __ )____  _  __
-  / __  / __ \/ __/  / __  / __ \| |/_/
- / /_/ / /_/ / /_   / /_/ / /_/ />  <
-/_____/\____/\__/  /_____/\____/_/|_|
-  `)
-}
-
-func commandExists(commandName string, commandList []CommandInfo) bool {
-	for _, cmd := range commandList {
-		if cmd.Name == commandName {
-			return true
-		}
+func FetchLicense(licenseKey string) (string, error) {
+	if licenseKey == "" || licenseKey == "none" {
+		return "", fmt.Errorf("no license key provided or selected 'none'")
 	}
-	return false
-}
 
-func argExists(argName string, args []ArgInfo) bool {
-	for _, arg := range args {
-		if arg.Name == argName {
-			return true
-		}
+	apiURL := fmt.Sprintf("https://api.github.com/licenses/%s", licenseKey)
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
 	}
-	return false
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request to %s: %w", apiURL, err)
+	}
+
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("User-Agent", "bot-box")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch license %s: %w", licenseKey, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to fetch license %s: status %s, body: %s",
+			licenseKey, resp.Status, string(bodyBytes))
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body for %s: %w", licenseKey, err)
+	}
+
+	var licenseResp LicenseResponse
+	err = json.Unmarshal(bodyBytes, &licenseResp)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse JSON response for %s: %w", licenseKey, err)
+	}
+
+	if licenseResp.Body == "" {
+		return "", fmt.Errorf("no license body found in response for %s", licenseKey)
+	}
+
+	return licenseResp.Body, nil
 }
 
 /*
