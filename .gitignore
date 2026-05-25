@@ -29,3 +29,6 @@ dist/
 
 # ignore test directories
 test/
+
+# AUR
+aur/
