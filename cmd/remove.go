@@ -37,7 +37,7 @@ The command ensures safe removal without breaking your project configuration.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, err := utils.FindBotConf()
 		if err != nil {
-			fmt.Println("Current directory is not in a botbox project.")
+			fmt.Fprintln(os.Stderr, "Current directory is not in a botbox project.")
 			return
 		}
 
@@ -46,9 +46,31 @@ The command ensures safe removal without breaking your project configuration.`,
 		} else {
 			removeCogName = ""
 		}
+
+		yes, _ := cmd.Flags().GetBool("yes")
+		if yes || isHeadless(cmd, nil) {
+			runRemoveHeadless(args)
+			return
+		}
+
 		model := utils.RemoveModel(removeCallback, removeInitCallback)
 		utils.CupSleeve(model)
 	},
+}
+
+func runRemoveHeadless(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Error: a cog name is required when running without the TUI")
+		os.Exit(1)
+	}
+
+	model := utils.RemoveModel(removeCallback, removeInitCallback)
+
+	if utils.PrintErrors(utils.RunHeadless(model)) {
+		os.Exit(1)
+	}
+
+	fmt.Println(removeCogName)
 }
 
 func removeCallback(model *utils.Model) []error {
@@ -70,11 +92,18 @@ func removeCallback(model *utils.Model) []error {
 		return errors
 	}
 
+	found := false
 	for i, cog := range config.Cogs {
 		if cog.Name == *filename {
 			cogRemove = cog
 			config.Cogs = slices.Delete(config.Cogs, i, i+1)
+			found = true
+			break
 		}
+	}
+	if !found {
+		errors = append(errors, fmt.Errorf("cog '%s' does not exist in the project", *filename))
+		return errors
 	}
 
 	jsonData, err := json.MarshalIndent(config, "", "  ")
@@ -83,7 +112,11 @@ func removeCallback(model *utils.Model) []error {
 		return errors
 	}
 
-	err = os.Remove(rootDir + "/src/cogs/" + cogRemove.File + ".py")
+	err = os.Remove(filepath.Join(rootDir, "src", "cogs", cogRemove.File+".py"))
+	if err != nil && !os.IsNotExist(err) {
+		errors = append(errors, fmt.Errorf("error removing cog file: %w", err))
+		return errors
+	}
 
 	err = os.WriteFile(configPath, jsonData, 0644)
 	if err != nil {
@@ -126,6 +159,7 @@ func removeInitCallback(model *utils.Model, allFormsModels []utils.Values) {
 
 func init() {
 	rootCmd.AddCommand(removeCmd)
+	removeCmd.Flags().BoolP("yes", "y", false, "Remove without the interactive TUI or confirmation")
 }
 
 /*

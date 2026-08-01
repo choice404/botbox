@@ -28,7 +28,10 @@ your Discord bot development workflow.
 Built with a cog-based architecture for modularity and featuring automatic updates, 
 global configuration management, and seamless project upgrades.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if cmd.Name() != "update" {
+		if headless, err := cmd.Flags().GetBool("headless"); err == nil && headless {
+			utils.HeadlessMode = true
+		}
+		if cmd.Name() != "update" && !utils.HeadlessMode {
 			checkForUpdatesIfEnabled()
 		}
 	},
@@ -60,23 +63,25 @@ func checkForUpdatesIfEnabled() {
 	}
 
 	if hasUpdate {
-		fmt.Printf("📦 Update available: %s → %s\n", utils.Version, latest.TagName)
-		fmt.Printf("Run 'botbox update' to update, or 'botbox config set -g cli.check_updates false' to disable notifications.\n\n")
+		fmt.Fprintf(os.Stderr, "📦 Update available: %s → %s\n", utils.Version, latest.TagName)
+		fmt.Fprintf(os.Stderr, "Run 'botbox update' to update, or 'botbox config set -g cli.check_updates false' to disable notifications.\n\n")
 
 		if utils.ShouldAutoUpdate() {
-			fmt.Println("🔄 Auto-update is enabled, updating now...")
+			fmt.Fprintln(os.Stderr, "🔄 Auto-update is enabled, updating now...")
 			if err := utils.UpdateBotBox(latest.TagName); err != nil {
-				fmt.Printf("❌ Auto-update failed: %v\n", err)
-				fmt.Println("Please run 'botbox update' to update.")
-				fmt.Println("If you want to disable auto-updates, run 'botbox config set -g cli.auto_update false'.")
+				fmt.Fprintf(os.Stderr, "❌ Auto-update failed: %v\n", err)
+				fmt.Fprintln(os.Stderr, "Please run 'botbox update' to update.")
+				fmt.Fprintln(os.Stderr, "If you want to disable auto-updates, run 'botbox config set -g cli.auto_update false'.")
 			} else {
-				fmt.Println("✅ Auto-update completed! Please restart your terminal.")
+				fmt.Fprintln(os.Stderr, "✅ Auto-update completed! Please restart your terminal.")
 			}
 		}
 	}
 }
 
 func init() {
+	rootCmd.PersistentFlags().Bool("headless", false, "Run without the interactive TUI")
+
 	exists, err := utils.GlobalConfigExists()
 	if err != nil {
 		fmt.Printf("Error checking config: %v\n", err)

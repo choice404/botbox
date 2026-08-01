@@ -7,6 +7,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/choice404/botbox/v2/cmd/utils"
@@ -28,9 +29,44 @@ Use this command when you've manually added/removed cogs or when the
 configuration seems out of sync with your actual project structure. 
 It ensures your bot will load all available cogs correctly.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		if isHeadless(cmd, nil) {
+			runSyncHeadless()
+			return
+		}
 		model := utils.ConfigSyncModel(configCallback, configSyncInitCallback)
 		utils.CupSleeve(model)
 	},
+}
+
+func runSyncHeadless() {
+	result, err := utils.SyncCogsWithConfig()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+
+	if len(result.Errors) > 0 {
+		for _, syncErr := range result.Errors {
+			fmt.Fprintln(os.Stderr, "sync error:", syncErr)
+		}
+		os.Exit(1)
+	}
+
+	if len(result.AddedCogs) > 0 {
+		fmt.Println("added:", strings.Join(result.AddedCogs, ", "))
+	}
+	if len(result.UpdatedCogs) > 0 {
+		fmt.Println("updated:", strings.Join(result.UpdatedCogs, ", "))
+	}
+	if len(result.RemovedCogs) > 0 {
+		fmt.Println("removed:", strings.Join(result.RemovedCogs, ", "))
+	}
+	if len(result.HeaderIssues) > 0 {
+		fmt.Fprintln(os.Stderr, "header issues:", strings.Join(result.HeaderIssues, ", "))
+	}
+	if len(result.AddedCogs) == 0 && len(result.UpdatedCogs) == 0 && len(result.RemovedCogs) == 0 {
+		fmt.Println("no changes")
+	}
 }
 
 func configSyncInitCallback(model *utils.Model, allFormsModels []utils.Values) {

@@ -8,6 +8,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +39,7 @@ of manually creating cogs to ensure proper integration.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, err := utils.FindBotConf()
 		if err != nil {
-			fmt.Println("Current directory is not in a botbox project.")
+			fmt.Fprintln(os.Stderr, "Current directory is not in a botbox project.")
 			return
 		}
 
@@ -48,9 +49,104 @@ of manually creating cogs to ensure proper integration.`,
 			addCogName = ""
 		}
 
+		if isHeadless(cmd, []string{"commands"}) {
+			runAddHeadless(cmd, args)
+			return
+		}
+
 		model := utils.AddModel(addCallback, addInitCallback)
 		utils.CupSleeve(model)
 	},
+}
+
+func runAddHeadless(cmd *cobra.Command, args []string) {
+	if addCogName == "" {
+		fmt.Fprintln(os.Stderr, "Error: a cog name is required when running without the TUI")
+		os.Exit(1)
+	}
+
+	rawCommands, _ := cmd.Flags().GetString("commands")
+	commands, err := parseCommandsInput(rawCommands)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+
+	// Validate each command against the ones accepted before it
+	var slashCommands, prefixCommands []utils.CommandInfo
+	for i, command := range commands {
+		if err := utils.ValidateCommand(command, commands[:i]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: command '%s': %v\n", command.Name, err)
+			os.Exit(1)
+		}
+		if command.Type == "slash" {
+			slashCommands = append(slashCommands, command)
+		} else {
+			prefixCommands = append(prefixCommands, command)
+		}
+	}
+
+	slashJSON, err := utils.CmdInfoSliceToJSON(slashCommands)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+	prefixJSON, err := utils.CmdInfoSliceToJSON(prefixCommands)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+
+	model := utils.AddModel(addCallback, addInitCallback)
+	model.ModelValues.Map["slashCommands"] = &slashJSON
+	model.ModelValues.Map["prefixCommands"] = &prefixJSON
+
+	if utils.PrintErrors(utils.RunHeadless(model)) {
+		os.Exit(1)
+	}
+
+	rootDir, err := utils.FindBotConf()
+	if err == nil {
+		fileBase := strings.ToLower(string(addCogName[0])) + addCogName[1:]
+		fmt.Println(filepath.Join(rootDir, "src", "cogs", fileBase+".py"))
+	}
+}
+
+/**
+ * parseCommandsInput
+ * Parses the --commands flag which accepts inline JSON, @path/to/file.json, or - for stdin
+ * @param raw {string} - the raw flag value
+ * @return []utils.CommandInfo - the parsed commands
+ * @return error - any read or parse failure
+ **/
+func parseCommandsInput(raw string) ([]utils.CommandInfo, error) {
+	if raw == "" {
+		return nil, nil
+	}
+
+	var data []byte
+	switch {
+	case raw == "-":
+		stdinData, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return nil, fmt.Errorf("error reading commands from stdin: %w", err)
+		}
+		data = stdinData
+	case strings.HasPrefix(raw, "@"):
+		fileData, err := os.ReadFile(strings.TrimPrefix(raw, "@"))
+		if err != nil {
+			return nil, fmt.Errorf("error reading commands file: %w", err)
+		}
+		data = fileData
+	default:
+		data = []byte(raw)
+	}
+
+	var commands []utils.CommandInfo
+	if err := json.Unmarshal(data, &commands); err != nil {
+		return nil, fmt.Errorf("error parsing commands JSON: %w", err)
+	}
+	return commands, nil
 }
 
 func addCallback(model *utils.Model) []error {
@@ -326,7 +422,7 @@ func buildArgString(args []utils.ArgInfo) string {
 
 func init() {
 	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	addCmd.Flags().String("commands", "", "JSON array of commands to generate, accepts inline JSON, @path/to/file.json, or - for stdin")
 }
 
 /*

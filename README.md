@@ -45,6 +45,7 @@ Built with **Go**, [`Cobra`](https://github.com/spf13/cobra), [`Bubble Tea`](htt
 
 ## 🚀 Features
 
+-   **Headless Mode**: Every command can run without the interactive TUI using flags, so Bot Box works in scripts and CI.
 -   **Slash Command Support**: Seamless integration via `discord.ext.commands`.
 -   **Automated Cog Generation**: Generate new cogs with predefined commands and arguments effortlessly.
 -   **Project Initialization**: Quick setup with `.env` and `botbox.conf` files.
@@ -150,6 +151,71 @@ Upgrade your `botbox.conf` file to the latest schema format. This command will:
 - Analyze your cog files to extract detailed command information
 - Create a backup of your original configuration
 - Upgrade to the latest schema while preserving all settings
+
+### Headless Mode
+
+Every command can run without the interactive TUI. Providing any value flag implies headless mode, or pass `--headless` explicitly. Data goes to stdout and diagnostics go to stderr so output can be piped.
+
+#### Create or initialize a project headlessly
+
+```sh
+# Create a new project with flags
+botbox create --name MyBot --description "A really cool bot" --author "John Doe" --token YOUR_TOKEN --guild GUILD_ID
+
+# The token can come from the BOTBOX_TOKEN environment variable instead
+export BOTBOX_TOKEN=YOUR_TOKEN
+botbox create --name MyBot --description "A really cool bot" --author "John Doe"
+
+# Doppler based projects
+botbox create --name MyBot --description "A really cool bot" --author "John Doe" --env doppler --doppler-project my-project --doppler-env dev
+
+# Initialize in the current directory with the same flags
+botbox init --name MyBot --description "A really cool bot" --author "John Doe"
+```
+
+Use `--force` to overwrite existing files without prompting. `--author` and `--prefix` fall back to `user.default_user` and `defaults.command_prefix` from the global config.
+
+#### Add a cog headlessly
+
+The `--commands` flag takes a JSON array of commands, either inline, from a file with `@path/to/file.json`, or from stdin with `-`.
+
+```sh
+botbox add Greeter --commands '[
+  {
+    "Name": "greet",
+    "Scope": "guild",
+    "Type": "slash",
+    "Description": "Greets a user",
+    "Args": [
+      { "Name": "user", "Type": "discord.Member", "Description": "The user to greet" }
+    ],
+    "ReturnType": "None"
+  }
+]'
+
+# Or from a file
+botbox add Greeter --commands @commands.json
+
+# A cog with no commands
+botbox add Greeter --headless
+```
+
+#### Other headless commands
+
+```sh
+# Remove a cog without confirmation
+botbox remove Greeter --yes
+
+# Print the project or global config as JSON
+botbox config --format json
+botbox config -g --format json
+
+# Print only a value, useful for scripting
+botbox config get bot.name --raw
+
+# Synchronize cogs and print a plain report
+botbox config sync --headless
+```
 
 ### Configuration Management
 
@@ -419,6 +485,7 @@ This will:
 
 ## 📜 Version History
 
+-   **2.6.0** Added headless mode so every command can run without the TUI using flags, with clean stdout for scripting. Added a release workflow so new versions are published on GitHub automatically. The update command now verifies the installed binary reports the expected version and warns about PATH conflicts. Extracted form validation into shared validators and added the first unit tests
 -   **2.5.4** Fixed the bot name being overwritten with the absolute path during create, ignored project creation errors in create and init, and a mismatch between the generated cog file name and the file entry in botbox.conf. Unified the guild env var to DISCORD_GUILD in all generated code and added validation to the cog name argument
 -   2.5.3 Fixed issues with project and cog generation. Getting guild info and setting guild scope for slash commands. Added input validation to argument forms to prevent "-" in argument names
 -   **2.5.2** Fixed a bit with the huh/tea display since long Huh.Groups won't display everything properly. Updated copyright and licenses in each file and updated command descriptions

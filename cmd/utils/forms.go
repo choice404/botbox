@@ -8,7 +8,6 @@ package utils
 import (
 	"fmt"
 	"strings"
-	"unicode"
 
 	"github.com/charmbracelet/huh"
 )
@@ -73,47 +72,19 @@ func createFormGenerator(values Values, modelValues Values) *huh.Form {
 				Title("Enter the name of your bot").
 				Prompt("> ").
 				Value(values.Map["botName"]).
-				Validate(func(s string) error {
-					if *values.Map["botName"] == "" {
-						return fmt.Errorf("Bot name cannot be empty")
-					}
-					if len(s) > 20 {
-						return fmt.Errorf("Bot name is too long")
-					}
-					r := []rune(s)[0]
-					if !unicode.IsLetter(r) {
-						return fmt.Errorf("Bot name must start with a letter")
-					}
-					if strings.ContainsRune(s, ' ') || strings.ContainsRune(s, '\t') {
-						return fmt.Errorf("Bot name cannot contain whitespace")
-					}
-					if strings.ContainsAny(s, "!@#$%^&*()_+={}[]|\\:;\"'<>,.?/~`") {
-						return fmt.Errorf("Bot name cannot contain special characters")
-					}
-					return nil
-				}),
+				Validate(ValidateBotName),
 
 			huh.NewText().
 				Title("Enter a description of your bot").
 				Value(values.Map["botDescription"]).
 				CharLimit(100).
-				Validate(func(s string) error {
-					if *values.Map["botDescription"] == "" {
-						return fmt.Errorf("Description cannot be empty")
-					}
-					return nil
-				}),
+				Validate(ValidateBotDescription),
 
 			huh.NewInput().
 				Title("Enter the author of your bot").
 				Prompt("> ").
 				Value(values.Map["botAuthor"]).
-				Validate(func(s string) error {
-					if *values.Map["botAuthor"] == "" {
-						return fmt.Errorf("Author name cannot be empty")
-					}
-					return nil
-				}),
+				Validate(ValidateBotAuthor),
 
 			huh.NewInput().
 				Title("Enter the command prefix for your bot (default: '!')").
@@ -124,15 +95,7 @@ func createFormGenerator(values Values, modelValues Values) *huh.Form {
 						*values.Map["botPrefix"] = "!"
 						return nil
 					}
-					if len(s) > 1 {
-						return fmt.Errorf("Command prefix must be a single character")
-					}
-					r := []rune(s)[0]
-
-					if unicode.IsLetter(r) || unicode.IsDigit(r) {
-						return fmt.Errorf("Command prefix can not be an alphanumeric character")
-					}
-					return nil
+					return ValidateBotPrefix(s)
 				}),
 		),
 		huh.NewGroup(
@@ -143,12 +106,7 @@ func createFormGenerator(values Values, modelValues Values) *huh.Form {
 					huh.NewOption("Use Doppler", "doppler"),
 				).
 				Value(values.Map["envChoice"]).
-				Validate(func(s string) error {
-					if s != "env" && s != "doppler" {
-						return fmt.Errorf("Please select either 'env' or 'doppler'")
-					}
-					return nil
-				}),
+				Validate(ValidateEnvChoice),
 
 			huh.NewInput().
 				TitleFunc(func() string {
@@ -160,15 +118,7 @@ func createFormGenerator(values Values, modelValues Values) *huh.Form {
 				Prompt("> ").
 				EchoMode(huh.EchoModePassword).
 				Validate(func(s string) error {
-					if *values.Map["envChoice"] == "env" {
-						if s == "" {
-							return fmt.Errorf("Token cannot be empty")
-						}
-						if len(s) < 9 {
-							return fmt.Errorf("Token is too short")
-						}
-					}
-					return nil
+					return ValidateToken(*values.Map["envChoice"], s)
 				}).
 				Value(values.Map["botTokenDopplerProject"]),
 
@@ -197,12 +147,7 @@ func createFormGenerator(values Values, modelValues Values) *huh.Form {
 					huh.NewOption("No license", "no-license"),
 				).
 				Value(values.Map["licenseType"]).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("Please select a license type")
-					}
-					return nil
-				}),
+				Validate(ValidateLicense),
 		),
 	).
 		WithWidth(100).
@@ -483,18 +428,9 @@ func addCmdInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 				Title("Enter the command name").
 				Prompt("> ").
 				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("command name cannot be empty")
-					}
-					if strings.Contains(s, " ") {
-						return fmt.Errorf("command name cannot contain spaces")
-					}
 					slashCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["slashCommands"])
 					prefixCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["prefixCommands"])
-					if commandExists(s, append(slashCommandList, prefixCommandList...)) {
-						return fmt.Errorf("command name already exists")
-					}
-					return nil
+					return ValidateCommandName(s, append(slashCommandList, prefixCommandList...))
 				}),
 			huh.NewSelect[string]().
 				Value(values.Map["cmdType"]).
@@ -503,15 +439,7 @@ func addCmdInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 					huh.NewOption("slash", "slash"),
 					huh.NewOption("prefix", "prefix"),
 				).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("return type cannot be empty")
-					}
-					if s != "slash" && s != "prefix" {
-						return fmt.Errorf("return type must either slash or prefix")
-					}
-					return nil
-				}),
+				Validate(ValidateCommandType),
 			huh.NewSelect[string]().
 				Value(values.Map["cmdScope"]).
 				Title("Select the command scope").
@@ -519,25 +447,12 @@ func addCmdInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 					huh.NewOption("guild", "guild"),
 					huh.NewOption("global", "global"),
 				).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("command scope cannot be empty")
-					}
-					if s != "guild" && s != "global" {
-						return fmt.Errorf("command scope must either guild or global")
-					}
-					return nil
-				}),
+				Validate(ValidateCommandScope),
 			huh.NewText().
 				Value(values.Map["cmdDescription"]).
 				Title("Enter the command description").
 				CharLimit(400).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("description cannot be empty")
-					}
-					return nil
-				}),
+				Validate(ValidateCommandDescription),
 			huh.NewSelect[string]().
 				Value(values.Map["cmdReturnType"]).
 				Title("Enter the command return type").
@@ -548,15 +463,7 @@ func addCmdInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 					huh.NewOption("bool", "bool"),
 					huh.NewOption("None", "None"),
 				).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("return type cannot be empty")
-					}
-					if s != "str" && s != "int" && s != "float" && s != "bool" && s != "None" {
-						return fmt.Errorf("return type must be one of str, int, float, bool, None")
-					}
-					return nil
-				}),
+				Validate(ValidateReturnType),
 		),
 	)
 	return cmdInfoForm
@@ -640,31 +547,14 @@ func addArgInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 				Title("Enter the argument name").
 				Prompt("> ").
 				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("Argument name cannot be empty")
-					}
-					if strings.Contains(s, " ") {
-						return fmt.Errorf("Argument name cannot contain spaces")
-					}
-					if strings.Contains(s, "-") {
-						return fmt.Errorf("Argument name cannot contain dashes")
-					}
 					args, _ := JSONToArgInfoSlice(*values.Map["args"])
-					if argExists(s, args) {
-						return fmt.Errorf("Argument name already exists")
-					}
-					return nil
+					return ValidateArgName(s, args)
 				}),
 			huh.NewText().
 				Value(values.Map["argDescription"]).
 				Title("Enter the argument description").
 				CharLimit(200).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("argument description cannot be empty")
-					}
-					return nil
-				}),
+				Validate(ValidateArgDescription),
 			huh.NewSelect[string]().
 				Value(values.Map["argType"]).
 				Title("Enter the argument type").
@@ -676,15 +566,7 @@ func addArgInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 					huh.NewOption("discord.Member", "discord.Member"),
 					huh.NewOption("discord.Role", "discord.Role"),
 				).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("argument type cannot be empty")
-					}
-					if s != "str" && s != "int" && s != "float" && s != "bool" && s != "discord.Member" && s != "discord.Role" {
-						return fmt.Errorf("argument type must be one of str, int, float, bool, discord.Member, discord.Role")
-					}
-					return nil
-				}),
+				Validate(ValidateArgType),
 		),
 	)
 	return argInfoForm

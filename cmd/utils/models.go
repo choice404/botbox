@@ -108,9 +108,10 @@ func AddModel(callback func(*Model) []error, initCallback func(*Model, []Values)
 		"prefixCommands": new(string),
 	}
 
-	emptySlice := "[]"
-	m.ModelValues.Map["slashCommands"] = &emptySlice
-	m.ModelValues.Map["prefixCommands"] = &emptySlice
+	emptySlash := "[]"
+	emptyPrefix := "[]"
+	m.ModelValues.Map["slashCommands"] = &emptySlash
+	m.ModelValues.Map["prefixCommands"] = &emptyPrefix
 
 	addForms := AddFormWrapperGenerator()
 

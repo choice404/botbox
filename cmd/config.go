@@ -6,7 +6,9 @@ See end of file for extended copyright information
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/choice404/botbox/v2/cmd/utils"
 	"github.com/spf13/cobra"
@@ -32,12 +34,19 @@ var (
 			}
 
 			globalFlag, _ := cmd.Flags().GetBool("global")
+			format, _ := cmd.Flags().GetString("format")
+
+			if format == "json" || isHeadless(cmd, nil) {
+				runConfigHeadless(globalFlag)
+				return
+			}
+
 			if globalFlag {
 				configModel = utils.GlobalConfigModel(configCallback, globalConfigInitCallback)
 			} else {
 				_, err := utils.FindBotConf()
 				if err != nil {
-					fmt.Println("Current directory is not in a botbox project.")
+					fmt.Fprintln(os.Stderr, "Current directory is not in a botbox project.")
 					return
 				}
 				configModel = utils.LocalConfigModel(configCallback, localConfigInitCallback)
@@ -46,6 +55,39 @@ var (
 		},
 	}
 )
+
+func runConfigHeadless(globalFlag bool) {
+	if globalFlag {
+		config, err := utils.LoadGlobalConfig()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(1)
+		}
+		jsonData, err := json.MarshalIndent(config, "", "  ")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(1)
+		}
+		fmt.Println(string(jsonData))
+		return
+	}
+
+	if _, err := utils.FindBotConf(); err != nil {
+		fmt.Fprintln(os.Stderr, "Current directory is not in a botbox project.")
+		os.Exit(1)
+	}
+	config, err := utils.LoadConfig()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+	jsonData, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+	fmt.Println(string(jsonData))
+}
 
 func localConfigInitCallback(model *utils.Model, allFormsModels []utils.Values) {
 	var errors []error

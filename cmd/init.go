@@ -7,6 +7,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/choice404/botbox/v2/cmd/utils"
 	"github.com/spf13/cobra"
@@ -27,16 +28,42 @@ details and generate all necessary files:
 
 Use this when you want to set up a Bot Box project in an existing directory.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		if isHeadless(cmd, projectValueFlags) {
+			runInitHeadless(cmd, args)
+			return
+		}
 		model := utils.CreateModel(CreateProjectInitCallback)
 		utils.CupSleeve(model)
 	},
+}
+
+func runInitHeadless(cmd *cobra.Command, args []string) {
+	force, _ := cmd.Flags().GetBool("force")
+
+	values, err := collectProjectValues(cmd, args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+
+	model := utils.CreateModel(CreateProjectInitCallback)
+	applyModelValues(&model, values)
+	setForceValue(&model, force)
+
+	if utils.PrintErrors(utils.RunHeadless(model)) {
+		os.Exit(1)
+	}
+
+	if cwd, err := os.Getwd(); err == nil {
+		fmt.Println(cwd)
+	}
 }
 
 func CreateProjectInitCallback(model *utils.Model) []error {
 	values := model.ModelValues
 	// TODO: Update so the CreateProject function does the overwrite form using the custom Tea/Huh manager.
 	// Or maybe not after some testing, still gonna figure it out a bit
-	if err := utils.CreateProject("./", values); err != nil {
+	if err := utils.CreateProject("./", values, readForceValue(values)); err != nil {
 		return []error{fmt.Errorf("error creating project: %w", err)}
 	}
 	return nil
@@ -44,6 +71,7 @@ func CreateProjectInitCallback(model *utils.Model) []error {
 
 func init() {
 	rootCmd.AddCommand(initCmd)
+	registerProjectFlags(initCmd)
 }
 
 /*

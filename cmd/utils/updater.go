@@ -9,7 +9,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -85,8 +88,12 @@ func UpdateBotBox(version string) error {
 	}
 
 	installCmd := exec.Command("go", "install", fmt.Sprintf("github.com/choice404/botbox/v2@%s", version))
-	if err := installCmd.Run(); err != nil {
-		return fmt.Errorf("failed to install update: %w", err)
+	if output, err := installCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to install update: %w\n%s", err, string(output))
+	}
+
+	if err := verifyInstalledVersion(version); err != nil {
+		fmt.Printf("⚠️  Warning: %v\n", err)
 	}
 
 	if err := updateGlobalConfigVersion(version); err != nil {
@@ -94,6 +101,75 @@ func UpdateBotBox(version string) error {
 	}
 
 	fmt.Printf("✅ Successfully updated to botbox %s\n", version)
+	return nil
+}
+
+/**
+ * installBinDir
+ * Finds the directory go install writes binaries to
+ * @return string - the bin directory
+ * @return error - any failure running go env
+ **/
+func installBinDir() (string, error) {
+	out, err := exec.Command("go", "env", "GOBIN").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to run go env: %w", err)
+	}
+	gobin := strings.TrimSpace(string(out))
+	if gobin != "" {
+		return gobin, nil
+	}
+
+	out, err = exec.Command("go", "env", "GOPATH").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to run go env: %w", err)
+	}
+	gopath := strings.TrimSpace(string(out))
+	if gopath == "" {
+		return "", fmt.Errorf("GOPATH is not set")
+	}
+	return filepath.Join(gopath, "bin"), nil
+}
+
+/**
+ * verifyInstalledVersion
+ * Runs the freshly installed binary and checks it reports the expected version
+ * Also warns when the currently running binary lives somewhere else in PATH
+ * @param version {string} - the version that was just installed
+ * @return error - a description of any mismatch found
+ **/
+func verifyInstalledVersion(version string) error {
+	binDir, err := installBinDir()
+	if err != nil {
+		return err
+	}
+
+	binName := "botbox"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(binDir, binName)
+
+	out, err := exec.Command(binPath, "--version").Output()
+	if err != nil {
+		return fmt.Errorf("could not run the installed binary at %s: %w", binPath, err)
+	}
+
+	installed := strings.TrimSpace(string(out))
+	if strings.TrimPrefix(installed, "v") != strings.TrimPrefix(version, "v") {
+		return fmt.Errorf("the installed binary reports %s instead of %s. The Go module proxy may be serving an older snapshot of this tag, this happens when a tag is moved after it was already fetched. A new release with a fresh tag is needed", installed, version)
+	}
+
+	// Warn when the running binary is not the one that was just updated
+	if exe, err := os.Executable(); err == nil {
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			installedResolved, _ := filepath.EvalSymlinks(binPath)
+			if installedResolved != "" && resolved != installedResolved {
+				return fmt.Errorf("the update was installed to %s but the botbox you are running lives at %s. Check your PATH order or remove the old copy", binPath, resolved)
+			}
+		}
+	}
+
 	return nil
 }
 

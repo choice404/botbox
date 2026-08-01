@@ -32,6 +32,11 @@ generate a new project directory containing:
 The project will include a demo HelloWorld cog and a CogManagement cog for dynamic 
 cog loading/unloading during development.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		if isHeadless(cmd, projectValueFlags) {
+			runCreateHeadless(cmd, args)
+			return
+		}
+
 		var createNewProject bool
 		botBoxExistsForm := huh.NewForm(
 			huh.NewGroup(
@@ -55,6 +60,37 @@ cog loading/unloading during development.`,
 		model := utils.CreateModel(createProjectCallback)
 		utils.CupSleeve(model)
 	},
+}
+
+func runCreateHeadless(cmd *cobra.Command, args []string) {
+	force, _ := cmd.Flags().GetBool("force")
+
+	if _, err := utils.FindBotConf(); err == nil && !force {
+		fmt.Fprintln(os.Stderr, "Error: the current directory is already in a botbox project, use --force to create one anyway")
+		os.Exit(1)
+	}
+
+	values, err := collectProjectValues(cmd, args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+
+	model := utils.CreateModel(createProjectCallback)
+	applyModelValues(&model, values)
+	setForceValue(&model, force)
+
+	if utils.PrintErrors(utils.RunHeadless(model)) {
+		os.Exit(1)
+	}
+
+	rootDir := values["botName"]
+	if !filepath.IsAbs(rootDir) {
+		if cwd, err := os.Getwd(); err == nil {
+			rootDir = filepath.Join(cwd, rootDir)
+		}
+	}
+	fmt.Println(rootDir)
 }
 
 func createProjectCallback(model *utils.Model) []error {
@@ -85,7 +121,7 @@ func createProjectCallback(model *utils.Model) []error {
 		return errors
 	}
 
-	if err := utils.CreateProject(rootDir, values); err != nil {
+	if err := utils.CreateProject(rootDir, values, readForceValue(values)); err != nil {
 		errors = append(errors, fmt.Errorf("error creating project: %w", err))
 		return errors
 	}
@@ -95,6 +131,7 @@ func createProjectCallback(model *utils.Model) []error {
 
 func init() {
 	rootCmd.AddCommand(createCmd)
+	registerProjectFlags(createCmd)
 }
 
 /*

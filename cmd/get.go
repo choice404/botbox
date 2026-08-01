@@ -15,6 +15,7 @@ import (
 var (
 	getGlobal bool
 	getLocal  bool
+	getRaw    bool
 )
 
 var getCmd = &cobra.Command{
@@ -64,6 +65,12 @@ func handleGlobalConfigGet(key string) error {
 	}
 
 	value := utils.GetGlobalConfigValue(key)
+	if getRaw {
+		if value != nil {
+			fmt.Printf("%v\n", value)
+		}
+		return nil
+	}
 	if value == nil {
 		fmt.Printf("global %s = <not set>\n", key)
 	} else {
@@ -88,6 +95,11 @@ func handleLocalConfigGet(key string) error {
 		return fmt.Errorf("failed to get local config value: %w", err)
 	}
 
+	if getRaw {
+		fmt.Printf("%v\n", value)
+		return nil
+	}
+
 	fmt.Printf("local %s = %v\n", key, value)
 	return nil
 }
@@ -97,6 +109,7 @@ func init() {
 
 	getCmd.Flags().BoolVarP(&getGlobal, "global", "g", false, "Get global configuration")
 	getCmd.Flags().BoolVarP(&getLocal, "local", "l", false, "Get local configuration")
+	getCmd.Flags().BoolVar(&getRaw, "raw", false, "Print only the value, useful for scripting")
 	getCmd.MarkFlagsMutuallyExclusive("global", "local")
 }
 
