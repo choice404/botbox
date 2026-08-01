@@ -706,7 +706,8 @@ func SyncGlobalConfigVersion() error {
 
 	configVersion := GetGlobalConfigValue("cli.version")
 
-	if configVersion == nil || configVersion.(string) != currentVersion {
+	configVersionStr, ok := configVersion.(string)
+	if !ok || configVersionStr != currentVersion {
 		if err := SetGlobalConfigValue("cli.version", currentVersion); err != nil {
 			return fmt.Errorf("failed to sync version in global config: %w", err)
 		}
