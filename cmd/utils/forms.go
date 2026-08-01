@@ -442,7 +442,7 @@ func addFileNameFormGenerator(values Values, modelValues Values) *huh.Form {
 				Title("Enter the filename").
 				Prompt("> ").
 				Validate(func(s string) error {
-					err := validateFileName(s)
+					err := ValidateFileName(s)
 					if err != nil {
 						return err
 					}

@@ -463,7 +463,7 @@ class Bot(commands.Bot):
         intents = discord.Intents.all()
         intents.message_content = True
         super().__init__(command_prefix = config['bot']['command_prefix'], intents=intents, help_command = None)
-        self.guild = discord.Object(id=os.getenv("DISCORD_GUILD", ""))
+        self.guild = discord.Object(id=int(os.getenv("DISCORD_GUILD", 0)))
         self.synced = False
 
     async def syncing(self):
@@ -552,7 +552,7 @@ import os
 
 load_dotenv()
 
-GUILD_ID = os.getenv('DISCORD_GUILD', 0)
+GUILD_ID = int(os.getenv('DISCORD_GUILD', 0))
 GUILD = discord.Object(id=GUILD_ID)
 
 class HelloWorld(commands.Cog):
@@ -616,7 +616,7 @@ import os
 
 load_dotenv()
 
-GUILD_ID = int(os.getenv("GUILD_ID", 0))
+GUILD_ID = int(os.getenv("DISCORD_GUILD", 0))
 GUILD = discord.Object(id=GUILD_ID)
 
 class CogManagement(commands.Cog, name="Cog Management"):
@@ -842,12 +842,12 @@ func LoadConfig() (Config, error) {
 	return cfg, nil
 }
 
-func validateFileName(fileName string) error {
-	if fileExists(fileName) {
-		return fmt.Errorf("file with name '%s' already exists", fileName)
-	}
+func ValidateFileName(fileName string) error {
 	if fileName == "" {
 		return fmt.Errorf("filename cannot be empty")
+	}
+	if fileExists(fileName) {
+		return fmt.Errorf("file with name '%s' already exists", fileName)
 	}
 	if strings.Contains(fileName, " ") {
 		return fmt.Errorf("filename cannot contain spaces")
@@ -863,6 +863,9 @@ func validateFileName(fileName string) error {
 
 func fileExists(fileName string) bool {
 	rootDir, err := FindBotConf()
+	if err != nil {
+		return false
+	}
 	filePath := filepath.Join(rootDir, "src", "cogs", fileName+".py")
 	_, err = os.Stat(filePath)
 	if err == nil {

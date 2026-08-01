@@ -6,6 +6,8 @@ See end of file for extended copyright information
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/choice404/botbox/v2/cmd/utils"
 	"github.com/spf13/cobra"
 )
@@ -34,7 +36,9 @@ func CreateProjectInitCallback(model *utils.Model) []error {
 	values := model.ModelValues
 	// TODO: Update so the CreateProject function does the overwrite form using the custom Tea/Huh manager.
 	// Or maybe not after some testing, still gonna figure it out a bit
-	utils.CreateProject("./", values)
+	if err := utils.CreateProject("./", values); err != nil {
+		return []error{fmt.Errorf("error creating project: %w", err)}
+	}
 	return nil
 }
 

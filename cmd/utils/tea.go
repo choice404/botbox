@@ -54,15 +54,15 @@ type FormWrapper struct {
 }
 
 func (fw *FormWrapper) GetValues() Values {
-	resultMap := make(map[string]string)
-	for key, ptr := range fw.Values.Map {
-		if ptr != nil {
-			resultMap[key] = *ptr
-		}
-	}
 	result := Values{
 		Map:  make(map[string]*string),
 		Name: fmt.Sprintf("%s_%s_%s", fw.FormGroup, fw.Name, fw.Values.Name),
+	}
+	for key, ptr := range fw.Values.Map {
+		if ptr != nil {
+			value := *ptr
+			result.Map[key] = &value
+		}
 	}
 	return result
 }

@@ -60,32 +60,35 @@ cog loading/unloading during development.`,
 func createProjectCallback(model *utils.Model) []error {
 	var errors []error
 	values := model.ModelValues
-	rootDir := values.Map["botName"]
+	rootDir := *values.Map["botName"]
 
-	if !filepath.IsAbs(*rootDir) {
+	if !filepath.IsAbs(rootDir) {
 		cwd, err := os.Getwd()
 		if err != nil {
 			errors = append(errors, fmt.Errorf("error getting current directory: %w", err))
 			return errors
 		}
-		*rootDir = filepath.Join(cwd, *rootDir)
+		rootDir = filepath.Join(cwd, rootDir)
 	}
 
-	if _, err := os.Stat(*rootDir); err == nil && !os.IsNotExist(err) {
-		errors = append(errors, fmt.Errorf("directory already exists: %s", *rootDir))
+	if _, err := os.Stat(rootDir); err == nil && !os.IsNotExist(err) {
+		errors = append(errors, fmt.Errorf("directory already exists: %s", rootDir))
 		return errors
 	} else if os.IsNotExist(err) {
-		err = os.MkdirAll(*rootDir, os.ModePerm)
+		err = os.MkdirAll(rootDir, os.ModePerm)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("error creating directory: %w", err))
 			return errors
 		}
 	} else {
-		errors = append(errors, fmt.Errorf("error checking directory %s: %w", *rootDir, err))
+		errors = append(errors, fmt.Errorf("error checking directory %s: %w", rootDir, err))
 		return errors
 	}
 
-	utils.CreateProject(*rootDir, values)
+	if err := utils.CreateProject(rootDir, values); err != nil {
+		errors = append(errors, fmt.Errorf("error creating project: %w", err))
+		return errors
+	}
 
 	return nil
 }
