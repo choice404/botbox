@@ -267,6 +267,13 @@ func SyncCogsWithConfig() (*SyncResult, error) {
 		result.RemovedCogs = append(result.RemovedCogs, fileName)
 	}
 
+	// Never let an empty parse result wipe cogs that are still recorded in the config
+	if len(newCogs) == 0 && len(config.Cogs) > 0 {
+		result.RemovedCogs = nil
+		result.Errors = append(result.Errors, fmt.Sprintf("no cog files parsed from %s, keeping the %d cog entries already in botbox.conf", cogsDir, len(config.Cogs)))
+		return result, nil
+	}
+
 	config.Cogs = newCogs
 
 	if err := saveConfig(rootDir, config); err != nil {
@@ -332,6 +339,38 @@ func parseCogFile(filePath, fileName string) (*ParsedCogInfo, error) {
 }
 
 func parseHeaderComment(lines []string, parsed *ParsedCogInfo) {
+	docstringLines := collectHeaderDocstring(lines)
+	if len(docstringLines) == 0 {
+		return
+	}
+
+	// Everything after the author line is positional, so find that line first
+	bodyStart := 0
+	for i, line := range docstringLines {
+		if strings.HasPrefix(line, "Bot Author:") {
+			parsed.Author = strings.TrimSpace(strings.TrimPrefix(line, "Bot Author:"))
+			bodyStart = i + 1
+			break
+		}
+	}
+
+	body := docstringLines[bodyStart:]
+
+	// Generated headers separate the author from the project block with a single blank line
+	if len(body) > 0 && body[0] == "" {
+		body = body[1:]
+	}
+
+	if len(body) > 0 {
+		parsed.ProjectName = body[0]
+	}
+
+	if len(body) > 1 {
+		parsed.Description = body[1]
+	}
+}
+
+func collectHeaderDocstring(lines []string) []string {
 	inDocstring := false
 	docstringLines := []string{}
 
@@ -341,38 +380,25 @@ func parseHeaderComment(lines []string, parsed *ParsedCogInfo) {
 		if strings.HasPrefix(trimmed, `"""`) {
 			if inDocstring {
 				break
-			} else {
-				inDocstring = true
-				if strings.Count(trimmed, `"""`) == 2 {
-					content := strings.Trim(trimmed, `"`)
-					docstringLines = append(docstringLines, content)
-					break
-				}
-				content := strings.TrimPrefix(trimmed, `"""`)
-				if content != "" {
-					docstringLines = append(docstringLines, content)
-				}
+			}
+
+			inDocstring = true
+			if strings.Count(trimmed, `"""`) == 2 {
+				content := strings.Trim(trimmed, `"`)
+				docstringLines = append(docstringLines, content)
+				break
+			}
+
+			content := strings.TrimPrefix(trimmed, `"""`)
+			if content != "" {
+				docstringLines = append(docstringLines, content)
 			}
 		} else if inDocstring {
 			docstringLines = append(docstringLines, trimmed)
 		}
 	}
 
-	if len(docstringLines) >= 3 {
-		for i, line := range docstringLines {
-			if strings.HasPrefix(line, "Bot Author:") {
-				parsed.Author = strings.TrimSpace(strings.TrimPrefix(line, "Bot Author:"))
-			} else if i == 1 || (i > 0 && parsed.ProjectName == "" && !strings.HasPrefix(line, "Bot Author:")) {
-				if parsed.ProjectName == "" && line != "" {
-					parsed.ProjectName = line
-				}
-			} else if i == 2 || (i > 1 && parsed.Description == "" && line != "") {
-				if parsed.Description == "" && line != "" {
-					parsed.Description = line
-				}
-			}
-		}
-	}
+	return docstringLines
 }
 
 func parseCogClassName(lines []string, parsed *ParsedCogInfo) {
@@ -410,42 +436,69 @@ func parseCommands(lines []string, parsed *ParsedCogInfo) {
 	}
 }
 
+// Line budgets for locating the function a command decorator belongs to
+const (
+	maxSlashDecoratorLines  = 30
+	maxPrefixDecoratorLines = 5
+)
+
 func parseSlashCommand(lines []string, startIndex int) *CommandInfo {
-	cmd := &CommandInfo{
-		Type: "slash",
-	}
-
 	commandRegex := regexp.MustCompile(`@app_commands\.command\s*\(\s*name\s*=\s*["']([^"']+)["']\s*,\s*description\s*=\s*["']([^"']+)["']\s*\)`)
-	if matches := commandRegex.FindStringSubmatch(lines[startIndex]); matches != nil {
-		cmd.Name = matches[1]
-		cmd.Description = matches[2]
+	matches := commandRegex.FindStringSubmatch(lines[startIndex])
+
+	// An unrecognized decorator carries no command identity, so record nothing
+	if matches == nil {
+		return nil
 	}
 
-	cmd.Scope = "global"
-	for j := startIndex + 1; j < len(lines) && j < startIndex+5; j++ {
-		if strings.Contains(lines[j], "@app_commands.guilds(GUILD)") {
-			cmd.Scope = "guild"
-			break
-		}
+	cmd := &CommandInfo{
+		Type:        "slash",
+		Scope:       "global",
+		Name:        matches[1],
+		Description: matches[2],
 	}
 
-	for j := startIndex + 1; j < len(lines) && j < startIndex+10; j++ {
-		line := strings.TrimSpace(lines[j])
-		if strings.HasPrefix(line, "async def ") {
-			parseCommandFunction(line, cmd)
-			break
-		}
+	funcIndex, describeIndex := scanDecoratorBlock(lines, startIndex, cmd)
+
+	if funcIndex == -1 {
+		return nil
 	}
 
-	for j := startIndex + 1; j < len(lines) && j < startIndex+10; j++ {
-		line := strings.TrimSpace(lines[j])
-		if strings.Contains(line, "@app_commands.describe") {
-			parseDescribeDecorator(lines, j, cmd)
-			break
-		}
+	parseCommandFunction(strings.TrimSpace(lines[funcIndex]), cmd)
+
+	// Argument descriptions are applied after the arguments themselves exist
+	if describeIndex != -1 {
+		parseDescribeDecorator(lines, describeIndex, cmd)
 	}
+
+	parseCommandDocstring(lines, funcIndex, cmd)
 
 	return cmd
+}
+
+// scanDecoratorBlock walks the decorators between startIndex and the function they decorate
+func scanDecoratorBlock(lines []string, startIndex int, cmd *CommandInfo) (funcIndex, describeIndex int) {
+	funcIndex = -1
+	describeIndex = -1
+
+	for j := startIndex + 1; j < len(lines) && j < startIndex+maxSlashDecoratorLines; j++ {
+		line := strings.TrimSpace(lines[j])
+
+		if strings.HasPrefix(line, "async def ") {
+			funcIndex = j
+			break
+		}
+
+		if strings.Contains(line, "@app_commands.guilds(GUILD)") {
+			cmd.Scope = "guild"
+		}
+
+		if describeIndex == -1 && strings.Contains(line, "@app_commands.describe") {
+			describeIndex = j
+		}
+	}
+
+	return funcIndex, describeIndex
 }
 
 func parsePrefixCommand(lines []string, startIndex int) *CommandInfo {
@@ -453,21 +506,33 @@ func parsePrefixCommand(lines []string, startIndex int) *CommandInfo {
 		Type:  "prefix",
 		Scope: "global"}
 
-	for j := startIndex + 1; j < len(lines) && j < startIndex+5; j++ {
+	funcIndex := -1
+	for j := startIndex + 1; j < len(lines) && j < startIndex+maxPrefixDecoratorLines; j++ {
 		line := strings.TrimSpace(lines[j])
 		if strings.HasPrefix(line, "async def ") {
-			parseCommandFunction(line, cmd)
-			if cmd.Name == "" {
-				funcRegex := regexp.MustCompile(`async def (\w+)\s*\(`)
-				if matches := funcRegex.FindStringSubmatch(line); matches != nil {
-					cmd.Name = matches[1]
-				}
-			}
+			funcIndex = j
 			break
 		}
 	}
 
-	parseCommandDocstring(lines, startIndex, cmd)
+	// Without a function definition there is no command name to record
+	if funcIndex == -1 {
+		return nil
+	}
+
+	funcLine := strings.TrimSpace(lines[funcIndex])
+	parseCommandFunction(funcLine, cmd)
+
+	funcRegex := regexp.MustCompile(`async def (\w+)\s*\(`)
+	if matches := funcRegex.FindStringSubmatch(funcLine); matches != nil {
+		cmd.Name = matches[1]
+	}
+
+	if cmd.Name == "" {
+		return nil
+	}
+
+	parseCommandDocstring(lines, funcIndex, cmd)
 
 	return cmd
 }
@@ -506,16 +571,18 @@ func parseCommandFunction(line string, cmd *CommandInfo) {
 }
 
 func parseDescribeDecorator(lines []string, startIndex int, cmd *CommandInfo) {
-	line := lines[startIndex]
+	fullDecorator := strings.TrimSpace(lines[startIndex])
 
-	fullDecorator := line
-	for j := startIndex + 1; j < len(lines); j++ {
-		nextLine := strings.TrimSpace(lines[j])
-		if strings.HasSuffix(nextLine, ")") {
-			fullDecorator += " " + nextLine
-			break
-		} else if nextLine != "" {
-			fullDecorator += " " + nextLine
+	// Only a decorator left open on its first line continues onto the following lines
+	if !strings.HasSuffix(fullDecorator, ")") {
+		for j := startIndex + 1; j < len(lines); j++ {
+			nextLine := strings.TrimSpace(lines[j])
+			if strings.HasSuffix(nextLine, ")") {
+				fullDecorator += " " + nextLine
+				break
+			} else if nextLine != "" {
+				fullDecorator += " " + nextLine
+			}
 		}
 	}
 
@@ -535,30 +602,28 @@ func parseDescribeDecorator(lines []string, startIndex int, cmd *CommandInfo) {
 	}
 }
 
-func parseCommandDocstring(lines []string, startIndex int, cmd *CommandInfo) {
-	funcIndex := -1
-	for j := startIndex + 1; j < len(lines) && j < startIndex+5; j++ {
-		if strings.HasPrefix(strings.TrimSpace(lines[j]), "async def ") {
-			funcIndex = j
-			break
-		}
-	}
-
-	if funcIndex == -1 {
+// parseCommandDocstring fills in the description from the function docstring when nothing else supplied one
+func parseCommandDocstring(lines []string, funcIndex int, cmd *CommandInfo) {
+	if funcIndex < 0 || cmd.Description != "" {
 		return
 	}
 
 	for j := funcIndex + 1; j < len(lines) && j < funcIndex+10; j++ {
 		line := strings.TrimSpace(lines[j])
-		if strings.HasPrefix(line, `"""`) {
-			content := strings.TrimPrefix(line, `"""`)
-			content = strings.TrimSuffix(content, `"""`)
-			content = strings.TrimSpace(content)
-			if content != "" {
-				cmd.Description = content
-			}
-			break
+		if !strings.HasPrefix(line, `"""`) {
+			continue
 		}
+
+		content := strings.TrimSuffix(strings.TrimPrefix(line, `"""`), `"""`)
+		content = strings.TrimSpace(content)
+
+		// Generated docstrings open on their own line and carry the summary on the next one
+		if content == "" && j+1 < len(lines) {
+			content = strings.TrimSpace(lines[j+1])
+		}
+
+		cmd.Description = content
+		break
 	}
 }
 
@@ -619,24 +684,21 @@ func commandsEqual(a, b []CommandInfo) bool {
 		return false
 	}
 
-	aMap := make(map[string]CommandInfo)
-	bMap := make(map[string]CommandInfo)
+	// Each entry needs its own counterpart so repeated names cannot hide a difference
+	used := make([]bool, len(b))
 
-	for _, cmd := range a {
-		aMap[cmd.Name] = cmd
-	}
-
-	for _, cmd := range b {
-		bMap[cmd.Name] = cmd
-	}
-
-	for name, cmdA := range aMap {
-		cmdB, exists := bMap[name]
-		if !exists {
-			return false
+	for _, cmdA := range a {
+		matched := false
+		for i := range b {
+			if used[i] || !commandEqual(cmdA, b[i]) {
+				continue
+			}
+			used[i] = true
+			matched = true
+			break
 		}
 
-		if !commandEqual(cmdA, cmdB) {
+		if !matched {
 			return false
 		}
 	}
@@ -672,9 +734,15 @@ func saveConfig(rootDir string, config Config) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	err = os.WriteFile(configPath, jsonData, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+	// Write to a sibling temp file first so a failed write cannot destroy the existing config
+	tempPath := configPath + ".tmp"
+	if err := os.WriteFile(tempPath, jsonData, 0644); err != nil {
+		return fmt.Errorf("failed to write temp config file: %w", err)
+	}
+
+	if err := os.Rename(tempPath, configPath); err != nil {
+		os.Remove(tempPath)
+		return fmt.Errorf("failed to replace config file: %w", err)
 	}
 
 	return nil

@@ -94,15 +94,9 @@ func (fw *FormWrapper) ExecuteSkipCallback(ModelValues Values, allForms []FormWr
 }
 
 func (m *Model) Init() tea.Cmd {
-	conf, err := LoadGlobalConfig()
-	if err != nil {
-		errors := []error{fmt.Errorf("failed to load global config: %w", err)}
-		m.HandleError(errors)
-	}
-	globalConfig = *conf
-
 	originalFormsCount := len(m.forms)
 
+	// The final status form has to exist before any error handling so jumpToFinalStatus has a target
 	m.forms = append(m.forms, FormWrapper{
 		Name:       "Complete",
 		Form:       finalCompleteFormGenerator,
@@ -110,6 +104,14 @@ func (m *Model) Init() tea.Cmd {
 		ShowStatus: true,
 		FormGroup:  "final",
 	})
+
+	conf, err := LoadGlobalConfig()
+	if err != nil {
+		m.HandleError([]error{fmt.Errorf("failed to load global config: %w", err)})
+		m.currentForm.WithShowHelp(false)
+		return m.currentForm.Init()
+	}
+	globalConfig = *conf
 
 	allValueMaps := make([]Values, len(m.forms))
 	for i, form := range m.forms {
@@ -605,56 +607,6 @@ func (m *Model) SetForms(forms []FormWrapper) {
 	m.forms = forms
 }
 
-func (m *Model) GetAllValues() Values {
-	allValues := make(map[string]*string)
-
-	for i, form := range m.forms {
-		formValues := form.GetValues()
-
-		var prefix string
-		if form.Name != "" {
-			prefix = strings.ToLower(strings.ReplaceAll(form.Name, " ", "_"))
-		} else {
-			prefix = fmt.Sprintf("form_%d", i)
-		}
-
-		for key, value := range formValues.Map {
-			uniqueKey := fmt.Sprintf("%s_%s", prefix, key)
-			allValues[uniqueKey] = value
-		}
-	}
-	result := Values{
-		Map:  allValues,
-		Name: fmt.Sprintf("%s_%s", m.title, "all_values"),
-	}
-	return result
-}
-
-func (m *Model) FlattenModelValuesWithPrefix() {
-	for key, value := range m.ModelValues.Map {
-		if value != nil {
-			m.ModelValues.Map[key] = new(string)
-			*m.ModelValues.Map[key] = *value
-		} else {
-			m.ModelValues.Map[key] = new(string)
-		}
-	}
-
-	for i, form := range m.forms {
-		prefix := strings.ToLower(strings.ReplaceAll(form.Name, " ", "_"))
-		if prefix == "" {
-			prefix = fmt.Sprintf("form_%d", i)
-		}
-
-		for key, value := range form.Values.Map {
-			if value != nil && *value != "" {
-				newKey := fmt.Sprintf("%s_%s", prefix, key)
-				m.ModelValues.Map[newKey] = value
-			}
-		}
-	}
-}
-
 func (m *Model) GetAllValuesFlat() Values {
 	allValues := make(map[string]*string)
 	for key, ptr := range m.ModelValues.Map {
@@ -675,17 +627,6 @@ func (m *Model) GetAllValuesFlat() Values {
 	return result
 }
 
-func (m *Model) FlattenModelValues() {
-	for key, value := range m.ModelValues.Map {
-		if value != nil {
-			m.ModelValues.Map[key] = new(string)
-			*m.ModelValues.Map[key] = *value
-		} else {
-			m.ModelValues.Map[key] = new(string)
-		}
-	}
-}
-
 func (m *Model) GetValuesByFormName(formName string) Values {
 	for _, form := range m.forms {
 		if form.Name == formName {
@@ -698,34 +639,6 @@ func (m *Model) GetValuesByFormName(formName string) Values {
 		Map:  make(map[string]*string),
 		Name: fmt.Sprintf("%s_%s", m.title, formName),
 	}
-}
-
-func (m *Model) GetValuesByFormIndex(index int) Values {
-	if index >= 0 && index < len(m.forms) {
-		values := m.forms[index].GetValues()
-		values.Name = fmt.Sprintf("%s_form_%d", m.title, index)
-		return values
-	}
-	return Values{
-		Map:  make(map[string]*string),
-		Name: fmt.Sprintf("%s_form_%d", m.title, index),
-	}
-}
-
-func (m *Model) GetValue(formName, key string) (string, bool) {
-	formValues := m.GetValuesByFormName(formName)
-	value, exists := formValues.Map[key]
-	return *value, exists
-}
-
-func (m *Model) GetValueFlat(key string) (string, bool) {
-	for _, form := range m.forms {
-		formValues := form.GetValues()
-		if value, exists := formValues.Map[key]; exists {
-			return *value, true
-		}
-	}
-	return "", false
 }
 
 func (m *Model) findNextValidForm(startIndex int) int {
@@ -778,53 +691,9 @@ func (m *Model) jumpToFinalStatus() {
 	m.state = stateDone
 }
 
-func FlattenValuesInto(targetValues Values, sourceValues Values) {
-	for key, value := range sourceValues.Map {
-		if existingValue, exists := targetValues.Map[key]; exists && existingValue != nil {
-			*existingValue = *value
-		} else {
-			newValue := value
-			targetValues.Map[key] = newValue
-		}
-	}
-}
-
-func MergeValues(targetValues Values, sourceValues Values) Values {
-	for key, value := range sourceValues.Map {
-		if existingValue, exists := targetValues.Map[key]; exists && existingValue != nil {
-			suffix := 1
-			for {
-				if _, exists := targetValues.Map[fmt.Sprintf("%s_%d", key, suffix)]; !exists {
-					newKey := fmt.Sprintf("%s_%d", key, suffix)
-					newValue := value
-					targetValues.Map[newKey] = newValue
-					break
-				}
-				suffix++
-			}
-
-		} else {
-			newValue := value
-			targetValues.Map[key] = newValue
-		}
-	}
-	return targetValues
-}
-
 func ResetFormValues(values Values) {
 	for key := range values.Map {
 		values.Map[key] = new(string)
-	}
-}
-
-func PreserveFormValues(values Values) {}
-
-func SetSpecificValues(values Values, updates Values) {
-	for key, value := range updates.Map {
-		if _, exists := values.Map[key]; exists {
-			newValue := value
-			values.Map[key] = newValue
-		}
 	}
 }
 

@@ -161,8 +161,18 @@ func createFormGenerator(values Values, modelValues Values) *huh.Form {
  * Add forms and model generators for other functionalities
  */
 func AddFormWrapperGenerator() []FormWrapper {
+	// Positions of each wrapper in the returned slice, referenced by callbacks and branches
+	const (
+		idxFileName = iota
+		idxCmdStart
+		idxCmdInfo
+		idxArgStart
+		idxArgInfo
+		idxAccept
+	)
+
 	forms := []FormWrapper{}
-	{ // NOTE: 0
+	{ // NOTE: idxFileName
 		values := map[string]*string{
 			"filename": new(string),
 		}
@@ -199,7 +209,7 @@ func AddFormWrapperGenerator() []FormWrapper {
 
 		forms = append(forms, wrapper)
 	}
-	{ // NOTE: 1
+	{ // NOTE: idxCmdStart
 		values := map[string]*string{
 			"cmdStartConfirm": new(string),
 		}
@@ -213,12 +223,12 @@ func AddFormWrapperGenerator() []FormWrapper {
 			ShowStatus: false,
 			FormGroup:  "command",
 			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
-				allForms[2].Values.Map["cmdName"] = new(string)
-				allForms[2].Values.Map["cmdType"] = new(string)
-				allForms[2].Values.Map["cmdScope"] = new(string)
-				allForms[2].Values.Map["cmdDescription"] = new(string)
-				allForms[2].Values.Map["cmdReturnType"] = new(string)
-				allForms[4].Values.Map["args"] = new(string)
+				allForms[idxCmdInfo].Values.Map["cmdName"] = new(string)
+				allForms[idxCmdInfo].Values.Map["cmdType"] = new(string)
+				allForms[idxCmdInfo].Values.Map["cmdScope"] = new(string)
+				allForms[idxCmdInfo].Values.Map["cmdDescription"] = new(string)
+				allForms[idxCmdInfo].Values.Map["cmdReturnType"] = new(string)
+				allForms[idxArgInfo].Values.Map["args"] = new(string)
 			},
 			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
 				if *formValues.Map["cmdStartConfirm"] == "yes" {
@@ -230,7 +240,7 @@ func AddFormWrapperGenerator() []FormWrapper {
 		}
 		forms = append(forms, wrapper)
 	}
-	{ // NOTE: 2
+	{ // NOTE: idxCmdInfo
 		values := map[string]*string{
 			"cmdName":        new(string),
 			"cmdType":        new(string),
@@ -262,7 +272,7 @@ func AddFormWrapperGenerator() []FormWrapper {
 		}
 		forms = append(forms, wrapper)
 	}
-	{ // NOTE: 3
+	{ // NOTE: idxArgStart
 		values := map[string]*string{
 			"argStartConfirm": new(string),
 		}
@@ -276,20 +286,20 @@ func AddFormWrapperGenerator() []FormWrapper {
 			ShowStatus: false,
 			FormGroup:  "argument",
 			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
-				allForms[4].Values.Map["argName"] = new(string)
-				allForms[4].Values.Map["argDescription"] = new(string)
-				allForms[4].Values.Map["argType"] = new(string)
+				allForms[idxArgInfo].Values.Map["argName"] = new(string)
+				allForms[idxArgInfo].Values.Map["argDescription"] = new(string)
+				allForms[idxArgInfo].Values.Map["argType"] = new(string)
 			},
 			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
 				if *formValues.Map["argStartConfirm"] == "yes" {
 					return -1
 				}
-				return 5
+				return idxAccept
 			},
 		}
 		forms = append(forms, wrapper)
 	}
-	{ // NOTE: 4
+	{ // NOTE: idxArgInfo
 		values := map[string]*string{
 			"args":           new(string),
 			"argName":        new(string),
@@ -319,20 +329,20 @@ func AddFormWrapperGenerator() []FormWrapper {
 				modelValues.Map["currentCommand"] = &commandString
 			},
 			BranchCallback: func(values Values, allForms []FormWrapper) int {
-				return 3
+				return idxArgStart
 			},
 			BranchValueHandler: func(targetFormIndex int, targetValues Values) {
-				if targetFormIndex == 1 {
+				if targetFormIndex == idxCmdStart {
 					ResetFormValues(targetValues)
 				}
-				if targetFormIndex == 2 {
+				if targetFormIndex == idxCmdInfo {
 					ResetFormValues(targetValues)
 				}
 			},
 		}
 		forms = append(forms, wrapper)
 	}
-	{ // NOTE: 5
+	{ // NOTE: idxAccept
 		values := map[string]*string{
 			"cmdAcceptConfirm": new(string),
 		}
@@ -362,13 +372,13 @@ func AddFormWrapperGenerator() []FormWrapper {
 				}
 			},
 			BranchCallback: func(values Values, allForms []FormWrapper) int {
-				return 1
+				return idxCmdStart
 			},
 			BranchValueHandler: func(targetFormIndex int, targetValues Values) {
-				if targetFormIndex == 1 {
+				if targetFormIndex == idxCmdStart {
 					ResetFormValues(targetValues)
 				}
-				if targetFormIndex == 2 {
+				if targetFormIndex == idxCmdInfo {
 					ResetFormValues(targetValues)
 				}
 			},
