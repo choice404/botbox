@@ -50,6 +50,7 @@ Built with **Go**, [`Cobra`](https://github.com/spf13/cobra), [`Bubble Tea`](htt
 -   **Built-in Logging**: Generated bots come with a ready to use logger with file rotation and console output, configured through LOG_LEVEL and LOG_DIR.
 -   **Dynamic Help Command**: Generated bots include a permission aware, paginated /help that reads the live bot state, so it stays accurate after cogs are loaded, unloaded, or reloaded without a restart. Output format is controlled by bot.help_style (compact or detailed).
 -   **Admin Tools**: Generated bots ship with /sync, /status, /uptime, and /set-prefix, all locked behind administrator permissions and an OWNER_IDS owner check.
+-   **Docker Support**: Turn any Bot Box project into a container with `botbox docker init`, generating a Dockerfile, docker-compose.yml, and .dockerignore matched to your env or Doppler setup.
 -   **Slash Command Support**: Seamless integration via `discord.ext.commands`.
 -   **Automated Cog Generation**: Generate new cogs with predefined commands and arguments effortlessly.
 -   **Project Initialization**: Quick setup with `.env` and `botbox.conf` files.
@@ -155,6 +156,20 @@ Upgrade your `botbox.conf` file to the latest schema format. This command will:
 - Analyze your cog files to extract detailed command information
 - Create a backup of your original configuration
 - Upgrade to the latest schema while preserving all settings
+
+#### Add Docker files to a project
+
+```sh
+botbox docker init
+```
+
+Generates a Dockerfile, docker-compose.yml, and .dockerignore in the project root, matched to how the project handles environment variables. Projects using a .env file get an env_file entry in the compose file, Doppler projects get the Doppler CLI in the image and expect DOPPLER_TOKEN in the environment. Use `--python` to pick the base image version and `--force` to overwrite existing files. New projects can opt in during creation, either through the prompt or with the `--docker` flag.
+
+```sh
+docker compose up -d
+```
+
+The compose file mounts logs/ and botbox.conf, and includes a commented development block that mounts src/ so /reload-cog picks up code changes without rebuilding the image.
 
 ### Headless Mode
 
@@ -384,6 +399,7 @@ The Bot Box CLI tool automatically keeps `botbox.conf` synchronized with your pr
 - `bot.command_prefix` - Your bot's command prefix
 - `bot.author` - Your name as the bot author
 - `bot.help_style` - How the generated /help command formats its output, compact or detailed. The help cog reads this at runtime so changes apply without restarting the bot
+- `bot.env_provider` - How the project supplies environment variables, env or doppler. Projects created before this key existed report the provider detected from doppler.yaml or .env in the project root
 
 Example `botbox.conf` structure:
 
@@ -396,7 +412,9 @@ Example `botbox.conf` structure:
     "name": "My Awesome Bot",
     "command_prefix": "!",
     "author": "Austin \"Choice404\" Choi",
-    "description": "A really cool bot!"
+    "description": "A really cool bot!",
+    "help_style": "compact",
+    "env_provider": "env"
   },
   "cogs": [{
     "name": "HelloWorld",
@@ -505,6 +523,7 @@ This will:
 
 ## 📜 Version History
 
+-   **2.9.0** Added Docker support. botbox docker init generates a Dockerfile, docker-compose.yml, and .dockerignore for any project, new projects can opt in at creation with the --docker flag or the new prompt, and the files adapt to .env or Doppler projects through the new bot.env_provider config key
 -   **2.8.0** Generated bots now include a dynamic /help command that filters by user permissions, paginates with buttons, reflects cog reloads without a restart, and formats output based on the new bot.help_style config key. Added an admin cog with /sync, /status, /uptime, and /set-prefix behind administrator permissions and an OWNER_IDS owner check. Fixed guild scoped commands being synced globally and cog reloads never re-registering commands
 -   **2.7.0** Added modal commands, a new command type that generates slash commands opening Discord modals with up to five text inputs, available in the TUI and headless mode with full config sync support. Generated bots now include a logger with file rotation under src/utils/logger.py, LOG_LEVEL and LOG_DIR in the .env, and all generated prints replaced with logger calls
 -   **2.6.3** Moved all generated file templates out of Go strings into embedded template files with byte identical output. Generated projects now include requirements.txt and a .gitignore. Fixed a crash when the global config fails to load, config sync wiping the cog list when parsing finds nothing, non atomic botbox.conf writes, guild commands being misread as global during sync, and several cog parser bugs. Added parser and config tests

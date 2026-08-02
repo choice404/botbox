@@ -14,7 +14,7 @@ import (
 )
 
 // Flags that carry project values, providing any of them implies headless mode
-var projectValueFlags = []string{"name", "description", "author", "prefix", "env", "token", "doppler-project", "guild", "doppler-env", "license", "help-style"}
+var projectValueFlags = []string{"name", "description", "author", "prefix", "env", "token", "doppler-project", "guild", "doppler-env", "license", "help-style", "docker"}
 
 /**
  * registerProjectFlags
@@ -34,6 +34,7 @@ func registerProjectFlags(cmd *cobra.Command) {
 	cmd.Flags().String("doppler-env", "", "Doppler environment name when using --env doppler")
 	cmd.Flags().String("license", "mit", "License type: mit, apache-2.0, gpl-3.0, bsd-3-clause, unlicense, no-license")
 	cmd.Flags().String("help-style", "compact", "How the generated help command formats its output: compact or detailed")
+	cmd.Flags().Bool("docker", false, "Generate Docker files (Dockerfile, docker-compose.yml, .dockerignore)")
 	cmd.Flags().Bool("force", false, "Overwrite existing files without prompting")
 }
 
@@ -138,6 +139,13 @@ func collectProjectValues(cmd *cobra.Command, args []string) (map[string]string,
 		return nil, err
 	}
 
+	// The docker flag rides the values bus as yes or no like the force flag does
+	docker, _ := flags.GetBool("docker")
+	dockerize := "no"
+	if docker {
+		dockerize = "yes"
+	}
+
 	return map[string]string{
 		"botName":                name,
 		"botDescription":         description,
@@ -148,6 +156,7 @@ func collectProjectValues(cmd *cobra.Command, args []string) (map[string]string,
 		"botGuildDopplerEnv":     guildOrEnv,
 		"licenseType":            license,
 		"helpStyle":              helpStyle,
+		"dockerize":              dockerize,
 	}, nil
 }
 

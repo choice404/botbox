@@ -227,6 +227,27 @@ func argExists(argName string, args []ArgInfo) bool {
 	return false
 }
 
+// DetectEnvProvider infers the env provider from the files in the project root,
+// doppler.yaml wins over .env and projects with neither default to env
+func DetectEnvProvider(rootDir string) string {
+	if _, err := os.Stat(filepath.Join(rootDir, "doppler.yaml")); err == nil {
+		return "doppler"
+	}
+	if _, err := os.Stat(filepath.Join(rootDir, ".env")); err == nil {
+		return "env"
+	}
+	return "env"
+}
+
+// ResolveEnvProvider returns the configured provider, falling back to file detection
+// for configs written before the env_provider key existed
+func ResolveEnvProvider(config Config, rootDir string) string {
+	if config.BotInfo.EnvProvider != "" {
+		return config.BotInfo.EnvProvider
+	}
+	return DetectEnvProvider(rootDir)
+}
+
 func SetLocalConfigValue(key string, value any) error {
 	rootDir, err := FindBotConf()
 	if err != nil {
@@ -272,6 +293,16 @@ func SetLocalConfigValue(key string, value any) error {
 			return err
 		}
 		config.BotInfo.HelpStyle = str
+	case "bot.env_provider":
+		str, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("bot.env_provider must be a string")
+		}
+		// The provider shares the env or doppler choice made at project creation
+		if err := ValidateEnvChoice(str); err != nil {
+			return err
+		}
+		config.BotInfo.EnvProvider = str
 	default:
 		return fmt.Errorf("invalid local config key: %s", key)
 	}
@@ -297,6 +328,13 @@ func GetLocalConfigValue(key string) (any, error) {
 	case "bot.help_style":
 		// Projects created before this key existed report the default
 		return NormalizeHelpStyle(config.BotInfo.HelpStyle), nil
+	case "bot.env_provider":
+		// Projects created before this key existed report the detected provider
+		rootDir, err := FindBotConf()
+		if err != nil {
+			return nil, fmt.Errorf("not in a botbox project: %w", err)
+		}
+		return ResolveEnvProvider(config, rootDir), nil
 	default:
 		return nil, fmt.Errorf("invalid local config key: %s", key)
 	}

@@ -27,6 +27,14 @@ type projectTemplateData struct {
 	Config      string
 	// HelpStyle is written into botbox.conf and read by the generated help cog
 	HelpStyle string
+	// EnvProvider is written into botbox.conf so later commands know how secrets are supplied
+	EnvProvider string
+}
+
+// dockerTemplateData holds the values rendered into the docker templates
+type dockerTemplateData struct {
+	PythonVersion string
+	Doppler       bool
 }
 
 // optionalValue reads a value off the model values bus, falling back when the key is absent
@@ -62,6 +70,11 @@ func CreateProject(rootDir string, values Values, force bool) error {
 	}
 
 	licenseType := *values.Map["licenseType"]
+	// The conf provider mirrors the env choice, anything but doppler stores env
+	envProvider := "env"
+	if *values.Map["envChoice"] == "doppler" {
+		envProvider = "doppler"
+	}
 	data := projectTemplateData{
 		Version:     Version,
 		Name:        *values.Map["botName"],
@@ -76,6 +89,7 @@ func CreateProject(rootDir string, values Values, force bool) error {
 		Project:     *values.Map["botTokenDopplerProject"],
 		Config:      *values.Map["botGuildDopplerEnv"],
 		HelpStyle:   NormalizeHelpStyle(optionalValue(values, "helpStyle", DefaultHelpStyle)),
+		EnvProvider: envProvider,
 	}
 
 	if confOpt, err := CreateFileOption(filepath.Join(rootDir, "botbox.conf"), force); err == nil && confOpt {
@@ -259,7 +273,60 @@ func CreateProject(rootDir string, values Values, force bool) error {
 		}
 	}
 
+	// Docker files are opt in, the tui confirm and the --docker flag both store yes here
+	if optionalValue(values, "dockerize", "no") == "yes" {
+		// The docker init command reads the version the same way, global default then 3.11
+		pythonVersion := DefaultPythonVersion
+		if conf, err := LoadGlobalConfig(); err == nil && conf.Defaults.PythonVersion != "" {
+			pythonVersion = conf.Defaults.PythonVersion
+		}
+		if _, err := GenerateDockerFiles(rootDir, pythonVersion, envProvider, force); err != nil {
+			return fmt.Errorf("error creating docker files: %w", err)
+		}
+	}
+
 	return nil
+}
+
+// DefaultPythonVersion seeds the docker base image when the global config has no default
+const DefaultPythonVersion = "3.11"
+
+// GenerateDockerFiles renders the Dockerfile, docker-compose.yml, and .dockerignore
+// into rootDir and returns the paths it actually wrote
+func GenerateDockerFiles(rootDir string, pythonVersion string, envProvider string, force bool) ([]string, error) {
+	data := dockerTemplateData{
+		PythonVersion: pythonVersion,
+		Doppler:       envProvider == "doppler",
+	}
+
+	// Each output file pairs with the template that renders it
+	files := []struct {
+		name     string
+		template string
+	}{
+		{"Dockerfile", "dockerfile.tmpl"},
+		{"docker-compose.yml", "docker-compose.yml.tmpl"},
+		{".dockerignore", "dockerignore.tmpl"},
+	}
+
+	var written []string
+	for _, file := range files {
+		path := filepath.Join(rootDir, file.name)
+		opt, err := CreateFileOption(path, force)
+		if err != nil {
+			return written, fmt.Errorf("error creating %s file: %w", file.name, err)
+		}
+		// CreateFileOption already reports skipped files, keep stdout clean for the path list
+		if !opt {
+			continue
+		}
+		if err := renderToFile(path, file.template, data); err != nil {
+			return written, fmt.Errorf("error creating %s file: %w", file.name, err)
+		}
+		written = append(written, path)
+	}
+
+	return written, nil
 }
 
 /*

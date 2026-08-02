@@ -26,6 +26,7 @@ func CreateFormWrapperGenerator() []FormWrapper {
 		"botGuildDopplerEnv":     new(string),
 		"licenseType":            new(string),
 		"helpStyle":              new(string),
+		"dockerize":              new(string),
 	}
 
 	wrapper := FormWrapper{
@@ -63,6 +64,9 @@ func CreateFormWrapperGenerator() []FormWrapper {
 			}
 			if formValues.Map["helpStyle"] != nil {
 				*modelValues.Map["helpStyle"] = *formValues.Map["helpStyle"]
+			}
+			if formValues.Map["dockerize"] != nil {
+				*modelValues.Map["dockerize"] = *formValues.Map["dockerize"]
 			}
 		},
 	}
@@ -161,6 +165,20 @@ func createFormGenerator(values Values, modelValues Values) *huh.Form {
 				).
 				Value(values.Map["helpStyle"]).
 				Validate(ValidateHelpStyle),
+
+			huh.NewConfirm().
+				Title("Generate Docker files for this project?").
+				Affirmative("yes").
+				Negative("no").
+				Validate(func(b bool) error {
+					// Store the confirm result on the values bus as yes or no
+					v := "no"
+					if b {
+						v = "yes"
+					}
+					*values.Map["dockerize"] = v
+					return nil
+				}),
 		),
 	).
 		WithWidth(100).

@@ -124,6 +124,7 @@ func isValidLocalConfigKey(key string) bool {
 		"bot.command_prefix": true,
 		"bot.author":         true,
 		"bot.help_style":     true,
+		"bot.env_provider":   true,
 	}
 
 	return validKeys[key]

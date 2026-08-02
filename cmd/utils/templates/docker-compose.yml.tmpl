@@ -1,0 +1,31 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+<<- if .Doppler >>
+    environment:
+      # Provide a Doppler service token so the container can fetch its secrets
+      - DOPPLER_TOKEN=${DOPPLER_TOKEN}
+<<- else >>
+    env_file:
+      - .env
+<<- end >>
+    volumes:
+      - ./logs:/app/logs
+      - ./botbox.conf:/app/botbox.conf:ro
+
+  # Uncomment for development, mounting the source enables cog hot reloading
+  # bot-dev:
+  #   build: .
+  #   restart: unless-stopped
+<<- if .Doppler >>
+  #   environment:
+  #     - DOPPLER_TOKEN=${DOPPLER_TOKEN}
+<<- else >>
+  #   env_file:
+  #     - .env
+<<- end >>
+  #   volumes:
+  #     - ./logs:/app/logs
+  #     - ./botbox.conf:/app/botbox.conf:ro
+  #     - ./src:/app/src

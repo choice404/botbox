@@ -1,0 +1,25 @@
+FROM python:<<.PythonVersion>>-slim
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+<<- if .Doppler >>
+
+# Install the Doppler CLI so the container can fetch its secrets at runtime
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl gnupg && \
+    curl -sLf --retry 3 --tlsv1.2 --proto "=https" "https://packages.doppler.com/public/cli/gpg.DE2A7741A397C129.key" | gpg --dearmor -o /usr/share/keyrings/doppler-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/doppler-archive-keyring.gpg] https://packages.doppler.com/public/cli/deb/debian any-version main" > /etc/apt/sources.list.d/doppler-cli.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends doppler && \
+    rm -rf /var/lib/apt/lists/*
+<<- end >>
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY botbox.conf .
+COPY src/ ./src/
+RUN useradd -m -u 1000 bot && mkdir -p /app/logs && chown -R bot:bot /app
+USER bot
+<<- if .Doppler >>
+CMD ["doppler", "run", "--", "python3", "src/main.py"]
+<<- else >>
+CMD ["python3", "src/main.py"]
+<<- end >>

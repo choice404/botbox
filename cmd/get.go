@@ -24,7 +24,7 @@ var getCmd = &cobra.Command{
 	Long: `Retrieve a configuration value using dot notation for nested keys.
 
 Local configuration keys (default):
-  - bot.name, bot.description, bot.command_prefix, bot.author, bot.help_style
+  - bot.name, bot.description, bot.command_prefix, bot.author, bot.help_style, bot.env_provider
 
 Global configuration keys (use -g flag):
   - cli.check_updates, cli.auto_update

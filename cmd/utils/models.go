@@ -31,6 +31,7 @@ func CreateModel(callback func(*Model) []error) Model {
 		"botGuildDopplerEnv":     new(string),
 		"licenseType":            new(string),
 		"helpStyle":              new(string),
+		"dockerize":              new(string),
 	}
 
 	m.ModelValues = Values{
@@ -74,6 +75,7 @@ func InitModel(callback func(*Model) []error) Model {
 		"botGuildDopplerEnv":     new(string),
 		"licenseType":            new(string),
 		"helpStyle":              new(string),
+		"dockerize":              new(string),
 	}
 
 	m.ModelValues = Values{

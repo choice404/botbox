@@ -59,6 +59,11 @@ func UpgradeConfig() (*UpgradeResult, error) {
 	// Configs written before help_style existed get the default so the key is always present
 	upgradedConfig.BotInfo.HelpStyle = NormalizeHelpStyle(upgradedConfig.BotInfo.HelpStyle)
 
+	// Configs written before env_provider existed get the detected provider so the key is always present
+	if upgradedConfig.BotInfo.EnvProvider == "" {
+		upgradedConfig.BotInfo.EnvProvider = DetectEnvProvider(rootDir)
+	}
+
 	result := &UpgradeResult{
 		UpgradedCogs: []string{},
 		Errors:       []string{},

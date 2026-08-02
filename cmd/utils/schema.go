@@ -56,6 +56,9 @@ type BotConfig struct {
 	// HelpStyle controls how the generated help command formats its output,
 	// configs written before this key existed unmarshal to "" and are read as compact
 	HelpStyle string `json:"help_style"`
+	// EnvProvider records how the project supplies environment variables, env or doppler,
+	// configs written before this key existed unmarshal to "" and are resolved by file detection
+	EnvProvider string `json:"env_provider"`
 }
 
 type CogConfig struct {
