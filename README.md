@@ -485,6 +485,7 @@ This will:
 
 ## 📜 Version History
 
+-   **2.6.2** Re-release of 2.6.0. The Go module proxy had permanently cached old deleted tags for 2.6.0 and 2.6.1, so installing those versions through go install would fetch stale code
 -   **2.6.0** Added headless mode so every command can run without the TUI using flags, with clean stdout for scripting. Added a release workflow so new versions are published on GitHub automatically. The update command now verifies the installed binary reports the expected version and warns about PATH conflicts. Extracted form validation into shared validators and added the first unit tests
 -   **2.5.4** Fixed the bot name being overwritten with the absolute path during create, ignored project creation errors in create and init, and a mismatch between the generated cog file name and the file entry in botbox.conf. Unified the guild env var to DISCORD_GUILD in all generated code and added validation to the cog name argument
 -   2.5.3 Fixed issues with project and cog generation. Getting guild info and setting guild scope for slash commands. Added input validation to argument forms to prevent "-" in argument names
