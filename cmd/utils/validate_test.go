@@ -5,7 +5,11 @@ See end of file for extended copyright information
 
 package utils
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
 
 func TestValidateBotName(t *testing.T) {
 	tests := []struct {
@@ -147,6 +151,117 @@ func TestValidateCommand(t *testing.T) {
 	}
 	if err := ValidateCommand(dupeArgs, nil); err == nil {
 		t.Error("duplicate arg names should fail")
+	}
+}
+
+func TestValidateFieldName(t *testing.T) {
+	existing := []FieldInfo{{Name: "summary", Label: "Summary", Style: "short"}}
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"valid name", "details", false},
+		{"empty", "", true},
+		{"contains space", "field name", true},
+		{"contains dash", "field-name", true},
+		{"duplicate", "summary", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateFieldName(tt.input, existing)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateFieldName(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateFieldLabel(t *testing.T) {
+	if err := ValidateFieldLabel("Feedback summary"); err != nil {
+		t.Errorf("valid label should pass, got %v", err)
+	}
+	if err := ValidateFieldLabel(""); err == nil {
+		t.Error("empty label should fail")
+	}
+	if err := ValidateFieldLabel(strings.Repeat("a", 46)); err == nil {
+		t.Error("label over 45 characters should fail")
+	}
+	if err := ValidateFieldLabel(strings.Repeat("a", 45)); err != nil {
+		t.Errorf("label of exactly 45 characters should pass, got %v", err)
+	}
+}
+
+func TestValidateFieldStyle(t *testing.T) {
+	for _, valid := range []string{"short", "paragraph"} {
+		if err := ValidateFieldStyle(valid); err != nil {
+			t.Errorf("%q should be valid, got %v", valid, err)
+		}
+	}
+	if err := ValidateFieldStyle(""); err == nil {
+		t.Error("empty style should be invalid")
+	}
+	if err := ValidateFieldStyle("long"); err == nil {
+		t.Error("unknown style should be invalid")
+	}
+}
+
+func TestValidateCommandModal(t *testing.T) {
+	valid := CommandInfo{
+		Name:        "feedback",
+		Scope:       "guild",
+		Type:        "modal",
+		Description: "Collects feedback",
+		ReturnType:  "None",
+		Fields: []FieldInfo{
+			{Name: "summary", Label: "Summary", Style: "short", Required: true},
+			{Name: "details", Label: "Details", Style: "paragraph"},
+		},
+	}
+
+	if err := ValidateCommand(valid, nil); err != nil {
+		t.Errorf("valid modal command should pass, got %v", err)
+	}
+
+	noFields := valid
+	noFields.Fields = nil
+	if err := ValidateCommand(noFields, nil); err == nil {
+		t.Error("modal command without fields should fail")
+	}
+
+	tooMany := valid
+	tooMany.Fields = nil
+	for i := 0; i < MaxModalFields+1; i++ {
+		tooMany.Fields = append(tooMany.Fields, FieldInfo{
+			Name:  fmt.Sprintf("field%d", i),
+			Label: fmt.Sprintf("Field %d", i),
+			Style: "short",
+		})
+	}
+	if err := ValidateCommand(tooMany, nil); err == nil {
+		t.Error("modal command with six fields should fail")
+	}
+
+	withArgs := valid
+	withArgs.Args = []ArgInfo{{Name: "user", Type: "str", Description: "who"}}
+	if err := ValidateCommand(withArgs, nil); err == nil {
+		t.Error("modal command with arguments should fail")
+	}
+
+	dupeFields := valid
+	dupeFields.Fields = []FieldInfo{
+		{Name: "summary", Label: "First", Style: "short"},
+		{Name: "summary", Label: "Second", Style: "short"},
+	}
+	if err := ValidateCommand(dupeFields, nil); err == nil {
+		t.Error("duplicate field names should fail")
+	}
+
+	slashWithFields := valid
+	slashWithFields.Type = "slash"
+	if err := ValidateCommand(slashWithFields, nil); err == nil {
+		t.Error("non modal command with fields should fail")
 	}
 }
 

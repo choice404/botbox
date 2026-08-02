@@ -473,7 +473,109 @@ func parseSlashCommand(lines []string, startIndex int) *CommandInfo {
 
 	parseCommandDocstring(lines, funcIndex, cmd)
 
+	// A command whose body opens a modal is recorded as a modal command
+	if modalClass, found := findSendModal(lines, funcIndex); found {
+		cmd.Type = "modal"
+		cmd.Args = nil
+		if modalClass != "" {
+			cmd.Fields = parseModalFields(lines, modalClass)
+		}
+	}
+
 	return cmd
+}
+
+// Line budget for scanning a command body for a send_modal call
+const maxCommandBodyLines = 30
+
+// findSendModal reports whether the function body calls send_modal and which modal class it opens
+func findSendModal(lines []string, funcIndex int) (string, bool) {
+	sendModalRegex := regexp.MustCompile(`send_modal\(\s*(\w+)\s*\(`)
+
+	for j := funcIndex + 1; j < len(lines) && j < funcIndex+maxCommandBodyLines; j++ {
+		line := strings.TrimSpace(lines[j])
+
+		// Stop before crossing into the next decorator, function, or class
+		if strings.HasPrefix(line, "@") || strings.HasPrefix(line, "async def ") ||
+			strings.HasPrefix(line, "def ") || strings.HasPrefix(line, "class ") {
+			break
+		}
+
+		if !strings.Contains(line, "send_modal(") {
+			continue
+		}
+
+		if matches := sendModalRegex.FindStringSubmatch(line); matches != nil {
+			return matches[1], true
+		}
+
+		// A send_modal call whose class cannot be read still marks the command as modal
+		return "", true
+	}
+
+	return "", false
+}
+
+// parseModalFields reads the TextInput assignments out of the named modal class body
+func parseModalFields(lines []string, modalClass string) []FieldInfo {
+	classRegex := regexp.MustCompile(`^class\s+` + regexp.QuoteMeta(modalClass) + `\s*\(.*discord\.ui\.Modal`)
+	textInputRegex := regexp.MustCompile(`^(\w+)\s*=\s*discord\.ui\.TextInput\((.*)\)\s*$`)
+	labelRegex := regexp.MustCompile(`label\s*=\s*["']([^"']*)["']`)
+	styleRegex := regexp.MustCompile(`style\s*=\s*discord\.TextStyle\.(\w+)`)
+	requiredRegex := regexp.MustCompile(`required\s*=\s*(True|False)`)
+	placeholderRegex := regexp.MustCompile(`placeholder\s*=\s*["']([^"']*)["']`)
+
+	classIndex := -1
+	for i, line := range lines {
+		if classRegex.MatchString(strings.TrimSpace(line)) {
+			classIndex = i
+			break
+		}
+	}
+
+	if classIndex == -1 {
+		return nil
+	}
+
+	var fields []FieldInfo
+	for j := classIndex + 1; j < len(lines); j++ {
+		trimmed := strings.TrimSpace(lines[j])
+
+		// A non-indented statement ends the class body
+		if trimmed != "" && !strings.HasPrefix(lines[j], " ") && !strings.HasPrefix(lines[j], "\t") {
+			break
+		}
+
+		matches := textInputRegex.FindStringSubmatch(trimmed)
+		if matches == nil {
+			continue
+		}
+
+		field := FieldInfo{
+			Name: matches[1],
+			// TextInput defaults to a required short style input when the arguments are absent
+			Style:    "short",
+			Required: true,
+		}
+
+		callArgs := matches[2]
+		if labelMatch := labelRegex.FindStringSubmatch(callArgs); labelMatch != nil {
+			field.Label = labelMatch[1]
+		}
+		if styleMatch := styleRegex.FindStringSubmatch(callArgs); styleMatch != nil {
+			field.Style = styleMatch[1]
+		}
+		if requiredMatch := requiredRegex.FindStringSubmatch(callArgs); requiredMatch != nil {
+			field.Required = requiredMatch[1] == "True"
+		}
+		if placeholderMatch := placeholderRegex.FindStringSubmatch(callArgs); placeholderMatch != nil {
+			field.Placeholder = placeholderMatch[1]
+		}
+
+		fields = append(fields, field)
+	}
+
+	return fields
 }
 
 // scanDecoratorBlock walks the decorators between startIndex and the function they decorate
@@ -723,6 +825,16 @@ func commandEqual(a, b CommandInfo) bool {
 		}
 	}
 
+	if len(a.Fields) != len(b.Fields) {
+		return false
+	}
+
+	for i, fieldA := range a.Fields {
+		if fieldA != b.Fields[i] {
+			return false
+		}
+	}
+
 	return true
 }
 
@@ -768,7 +880,7 @@ func SyncGlobalConfigVersion() error {
 		if err := CreateGlobalConfig(); err != nil {
 			return fmt.Errorf("failed to create global config: %w", err)
 		}
-		fmt.Printf("📝 Created global config with version %s\n", currentVersion)
+		fmt.Fprintf(os.Stderr, "📝 Created global config with version %s\n", currentVersion)
 		return nil
 	}
 
@@ -779,7 +891,7 @@ func SyncGlobalConfigVersion() error {
 		if err := SetGlobalConfigValue("cli.version", currentVersion); err != nil {
 			return fmt.Errorf("failed to sync version in global config: %w", err)
 		}
-		fmt.Printf("📝 Synced global config version to %s\n", currentVersion)
+		fmt.Fprintf(os.Stderr, "📝 Synced global config version to %s\n", currentVersion)
 	}
 
 	return nil

@@ -110,6 +110,30 @@ func TestParseCogFile(t *testing.T) {
 			},
 		},
 		{
+			name: "modal command with two fields",
+			file: "modalCog",
+			want: ParsedCogInfo{
+				FileName:    "modalCog",
+				CogName:     "ModalCog",
+				Author:      "Austin Choi",
+				ProjectName: "TestBot",
+				Description: "A discord bot used by the parser tests",
+				SlashCommands: []CommandInfo{
+					{
+						Name:        "feedback",
+						Scope:       "guild",
+						Type:        "modal",
+						Description: "Collects feedback from a member",
+						ReturnType:  "None",
+						Fields: []FieldInfo{
+							{Name: "summary", Label: "Feedback summary", Style: "short", Required: true, Placeholder: "Short summary"},
+							{Name: "details", Label: "Feedback details", Style: "paragraph", Required: false},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "decorators the command regex cannot match",
 			file: "oddShape",
 			want: ParsedCogInfo{
@@ -150,6 +174,7 @@ func TestParseAllCogFiles(t *testing.T) {
 		"partialHeader": false,
 		"emptyName":     false,
 		"oddShape":      false,
+		"modalCog":      false,
 	}
 
 	if len(parsed) != len(want) {
@@ -322,6 +347,47 @@ func TestParsePrefixCommandRejectsUnusableDecorators(t *testing.T) {
 	}
 }
 
+// TestModalCommandTemplateParseRoundTrip renders a modal command and checks the parser reads back the same command
+func TestModalCommandTemplateParseRoundTrip(t *testing.T) {
+	modal := CommandInfo{
+		Name:        "feedback",
+		Scope:       "guild",
+		Type:        "modal",
+		Description: "Collects feedback from a member",
+		ReturnType:  "None",
+		Fields: []FieldInfo{
+			{Name: "summary", Label: "Feedback summary", Style: "short", Required: true, Placeholder: "Short summary"},
+			{Name: "details", Label: "Feedback details", Style: "paragraph", Required: false},
+		},
+	}
+
+	content, err := RenderTemplate("cog.py.tmpl", CogTemplateData{
+		Author:         "Austin Choi",
+		BotName:        "TestBot",
+		BotDescription: "A discord bot used by the parser tests",
+		ClassName:      "ModalCog",
+		Filename:       "modalCog",
+		SlashCommands:  []CommandInfo{modal},
+	})
+	if err != nil {
+		t.Fatalf("RenderTemplate returned error: %v", err)
+	}
+
+	path := filepath.Join(t.TempDir(), "modalCog.py")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write rendered cog: %v", err)
+	}
+
+	parsed, err := parseCogFile(path, "modalCog")
+	if err != nil {
+		t.Fatalf("parseCogFile returned error: %v", err)
+	}
+
+	if !commandsEqual(parsed.SlashCommands, []CommandInfo{modal}) {
+		t.Errorf("round trip changed the command\ngot:  %+v\nwant: %+v", parsed.SlashCommands, modal)
+	}
+}
+
 func TestCommandEqual(t *testing.T) {
 	base := CommandInfo{
 		Name:        "greet",
@@ -350,6 +416,24 @@ func TestCommandEqual(t *testing.T) {
 	withExtraArg := base
 	withExtraArg.Args = append(append([]ArgInfo{}, base.Args...), ArgInfo{Name: "times", Type: "int"})
 
+	modal := CommandInfo{
+		Name:        "feedback",
+		Scope:       "guild",
+		Type:        "modal",
+		Description: "Collects feedback",
+		ReturnType:  "None",
+		Fields:      []FieldInfo{{Name: "summary", Label: "Summary", Style: "short", Required: true}},
+	}
+
+	withFieldLabel := modal
+	withFieldLabel.Fields = []FieldInfo{{Name: "summary", Label: "Other", Style: "short", Required: true}}
+
+	withFieldRequired := modal
+	withFieldRequired.Fields = []FieldInfo{{Name: "summary", Label: "Summary", Style: "short", Required: false}}
+
+	withExtraField := modal
+	withExtraField.Fields = append(append([]FieldInfo{}, modal.Fields...), FieldInfo{Name: "details", Label: "Details", Style: "paragraph"})
+
 	tests := []struct {
 		name string
 		a    CommandInfo
@@ -363,6 +447,10 @@ func TestCommandEqual(t *testing.T) {
 		{"different arg type", base, withArgType, false},
 		{"different arg description", base, withArgDescription, false},
 		{"extra arg", base, withExtraArg, false},
+		{"identical modal", modal, modal, true},
+		{"different field label", modal, withFieldLabel, false},
+		{"different field required", modal, withFieldRequired, false},
+		{"extra field", modal, withExtraField, false},
 	}
 
 	for _, tt := range tests {

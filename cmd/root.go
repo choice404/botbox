@@ -43,7 +43,7 @@ func Execute(version string) {
 	rootCmd.SetVersionTemplate(`{{printf "%s\n" .Version}}`)
 
 	if err := utils.SyncGlobalConfigVersion(); err != nil {
-		fmt.Printf("⚠️  Warning: failed to sync version: %v\n", err)
+		fmt.Fprintf(os.Stderr, "⚠️  Warning: failed to sync version: %v\n", err)
 	}
 
 	err := rootCmd.Execute()

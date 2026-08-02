@@ -13,12 +13,19 @@ import (
 
 // Valid option sets shared by the forms and the headless flag parsing
 var (
-	validCommandTypes = []string{"slash", "prefix"}
+	validCommandTypes  = []string{"slash", "prefix", "modal"}
 	validCommandScopes = []string{"guild", "global"}
-	validReturnTypes = []string{"str", "int", "float", "bool", "None"}
-	validArgTypes = []string{"str", "int", "float", "bool", "discord.Member", "discord.Role"}
-	validLicenses = []string{"mit", "apache-2.0", "gpl-3.0", "bsd-3-clause", "unlicense", "no-license"}
+	validReturnTypes   = []string{"str", "int", "float", "bool", "None"}
+	validArgTypes      = []string{"str", "int", "float", "bool", "discord.Member", "discord.Role"}
+	validFieldStyles   = []string{"short", "paragraph"}
+	validLicenses      = []string{"mit", "apache-2.0", "gpl-3.0", "bsd-3-clause", "unlicense", "no-license"}
 )
+
+// Discord allows at most five text inputs on a single modal page
+const MaxModalFields = 5
+
+// Discord caps text input labels at 45 characters
+const maxFieldLabelLength = 45
 
 func contains(list []string, value string) bool {
 	for _, item := range list {
@@ -124,7 +131,7 @@ func ValidateCommandType(s string) error {
 		return fmt.Errorf("command type cannot be empty")
 	}
 	if !contains(validCommandTypes, s) {
-		return fmt.Errorf("command type must be either slash or prefix")
+		return fmt.Errorf("command type must be one of %s", strings.Join(validCommandTypes, ", "))
 	}
 	return nil
 }
@@ -189,6 +196,51 @@ func ValidateArgType(s string) error {
 	return nil
 }
 
+func fieldExists(fieldName string, fields []FieldInfo) bool {
+	for _, field := range fields {
+		if field.Name == fieldName {
+			return true
+		}
+	}
+	return false
+}
+
+func ValidateFieldName(s string, existing []FieldInfo) error {
+	if s == "" {
+		return fmt.Errorf("field name cannot be empty")
+	}
+	if strings.Contains(s, " ") {
+		return fmt.Errorf("field name cannot contain spaces")
+	}
+	if strings.Contains(s, "-") {
+		return fmt.Errorf("field name cannot contain dashes")
+	}
+	if fieldExists(s, existing) {
+		return fmt.Errorf("field name already exists")
+	}
+	return nil
+}
+
+func ValidateFieldLabel(s string) error {
+	if s == "" {
+		return fmt.Errorf("field label cannot be empty")
+	}
+	if len([]rune(s)) > maxFieldLabelLength {
+		return fmt.Errorf("field label must be at most %d characters", maxFieldLabelLength)
+	}
+	return nil
+}
+
+func ValidateFieldStyle(s string) error {
+	if s == "" {
+		return fmt.Errorf("field style cannot be empty")
+	}
+	if !contains(validFieldStyles, s) {
+		return fmt.Errorf("field style must be one of %s", strings.Join(validFieldStyles, ", "))
+	}
+	return nil
+}
+
 // ValidateCommand checks a full command definition against the already accepted commands
 func ValidateCommand(command CommandInfo, existing []CommandInfo) error {
 	if err := ValidateCommandName(command.Name, existing); err != nil {
@@ -205,6 +257,32 @@ func ValidateCommand(command CommandInfo, existing []CommandInfo) error {
 	}
 	if err := ValidateReturnType(command.ReturnType); err != nil {
 		return err
+	}
+	if command.Type == "modal" {
+		if len(command.Args) > 0 {
+			return fmt.Errorf("modal commands cannot have arguments")
+		}
+		if len(command.Fields) == 0 {
+			return fmt.Errorf("modal commands need at least one field")
+		}
+		if len(command.Fields) > MaxModalFields {
+			return fmt.Errorf("modal commands can have at most %d fields", MaxModalFields)
+		}
+		for i, field := range command.Fields {
+			if err := ValidateFieldName(field.Name, command.Fields[:i]); err != nil {
+				return fmt.Errorf("field '%s': %w", field.Name, err)
+			}
+			if err := ValidateFieldLabel(field.Label); err != nil {
+				return fmt.Errorf("field '%s': %w", field.Name, err)
+			}
+			if err := ValidateFieldStyle(field.Style); err != nil {
+				return fmt.Errorf("field '%s': %w", field.Name, err)
+			}
+		}
+		return nil
+	}
+	if len(command.Fields) > 0 {
+		return fmt.Errorf("only modal commands can have fields")
 	}
 	for i, arg := range command.Args {
 		if err := ValidateArgName(arg.Name, command.Args[:i]); err != nil {

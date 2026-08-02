@@ -46,6 +46,8 @@ Built with **Go**, [`Cobra`](https://github.com/spf13/cobra), [`Bubble Tea`](htt
 ## 🚀 Features
 
 -   **Headless Mode**: Every command can run without the interactive TUI using flags, so Bot Box works in scripts and CI.
+-   **Modal Commands**: Generate slash commands that open Discord modals with up to five text inputs, defined interactively or from JSON.
+-   **Built-in Logging**: Generated bots come with a ready to use logger with file rotation and console output, configured through LOG_LEVEL and LOG_DIR.
 -   **Slash Command Support**: Seamless integration via `discord.ext.commands`.
 -   **Automated Cog Generation**: Generate new cogs with predefined commands and arguments effortlessly.
 -   **Project Initialization**: Quick setup with `.env` and `botbox.conf` files.
@@ -198,6 +200,21 @@ botbox add Greeter --commands @commands.json
 
 # A cog with no commands
 botbox add Greeter --headless
+
+# A modal command, opens a Discord modal with text inputs when the slash command runs
+botbox add Feedback --commands '[
+  {
+    "Name": "feedback",
+    "Scope": "guild",
+    "Type": "modal",
+    "Description": "Collects user feedback",
+    "Fields": [
+      { "Name": "subject", "Label": "Subject", "Style": "short", "Required": true, "Placeholder": "Short summary" },
+      { "Name": "details", "Label": "Details", "Style": "paragraph", "Required": false, "Placeholder": "" }
+    ],
+    "ReturnType": "None"
+  }
+]'
 ```
 
 #### Other headless commands
@@ -485,6 +502,7 @@ This will:
 
 ## 📜 Version History
 
+-   **2.7.0** Added modal commands, a new command type that generates slash commands opening Discord modals with up to five text inputs, available in the TUI and headless mode with full config sync support. Generated bots now include a logger with file rotation under src/utils/logger.py, LOG_LEVEL and LOG_DIR in the .env, and all generated prints replaced with logger calls
 -   **2.6.3** Moved all generated file templates out of Go strings into embedded template files with byte identical output. Generated projects now include requirements.txt and a .gitignore. Fixed a crash when the global config fails to load, config sync wiping the cog list when parsing finds nothing, non atomic botbox.conf writes, guild commands being misread as global during sync, and several cog parser bugs. Added parser and config tests
 -   **2.6.2** Re-release of 2.6.0. The Go module proxy had permanently cached old deleted tags for 2.6.0 and 2.6.1, so installing those versions through go install would fetch stale code
 -   **2.6.0** Added headless mode so every command can run without the TUI using flags, with clean stdout for scripting. Added a release workflow so new versions are published on GitHub automatically. The update command now verifies the installed binary reports the expected version and warns about PATH conflicts. Extracted form validation into shared validators and added the first unit tests

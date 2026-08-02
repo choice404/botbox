@@ -168,6 +168,8 @@ func AddFormWrapperGenerator() []FormWrapper {
 		idxCmdInfo
 		idxArgStart
 		idxArgInfo
+		idxFieldStart
+		idxFieldInfo
 		idxAccept
 	)
 
@@ -229,6 +231,7 @@ func AddFormWrapperGenerator() []FormWrapper {
 				allForms[idxCmdInfo].Values.Map["cmdDescription"] = new(string)
 				allForms[idxCmdInfo].Values.Map["cmdReturnType"] = new(string)
 				allForms[idxArgInfo].Values.Map["args"] = new(string)
+				allForms[idxFieldInfo].Values.Map["fields"] = new(string)
 			},
 			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
 				if *formValues.Map["cmdStartConfirm"] == "yes" {
@@ -258,16 +261,29 @@ func AddFormWrapperGenerator() []FormWrapper {
 			ShowStatus: false,
 			FormGroup:  "command",
 			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				// Modal commands only respond through the modal, so their return type is fixed
+				returnType := *formValues.Map["cmdReturnType"]
+				if *formValues.Map["cmdType"] == "modal" {
+					returnType = "None"
+				}
 				command := CommandInfo{
 					Name:        *formValues.Map["cmdName"],
 					Type:        *formValues.Map["cmdType"],
 					Scope:       *formValues.Map["cmdScope"],
 					Description: *formValues.Map["cmdDescription"],
 					Args:        []ArgInfo{},
-					ReturnType:  *formValues.Map["cmdReturnType"],
+					Fields:      []FieldInfo{},
+					ReturnType:  returnType,
 				}
 				commandString, _ := command.ToJSON()
 				modelValues.Map["currentCommand"] = &commandString
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				// Modal commands collect fields instead of arguments
+				if *formValues.Map["cmdType"] == "modal" {
+					return idxFieldStart
+				}
+				return -1
 			},
 		}
 		forms = append(forms, wrapper)
@@ -342,6 +358,87 @@ func AddFormWrapperGenerator() []FormWrapper {
 		}
 		forms = append(forms, wrapper)
 	}
+	{ // NOTE: idxFieldStart
+		values := map[string]*string{
+			"fieldStartConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Add Field Start",
+			Form: addFieldStartFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addFieldStartValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "field",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				allForms[idxFieldInfo].Values.Map["fieldName"] = new(string)
+				allForms[idxFieldInfo].Values.Map["fieldLabel"] = new(string)
+				allForms[idxFieldInfo].Values.Map["fieldStyle"] = new(string)
+				allForms[idxFieldInfo].Values.Map["fieldRequired"] = new(string)
+				allForms[idxFieldInfo].Values.Map["fieldPlaceholder"] = new(string)
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["fieldStartConfirm"] == "yes" {
+					return -1
+				}
+				return idxAccept
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxFieldInfo
+		values := map[string]*string{
+			"fields":           new(string),
+			"fieldName":        new(string),
+			"fieldLabel":       new(string),
+			"fieldStyle":       new(string),
+			"fieldRequired":    new(string),
+			"fieldPlaceholder": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Add Field Info",
+			Form: addFieldInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addFieldInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "field",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentCommand, _ := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+
+				currentCommand.Fields = append(currentCommand.Fields, FieldInfo{
+					Name:        *values["fieldName"],
+					Label:       *values["fieldLabel"],
+					Style:       *values["fieldStyle"],
+					Required:    *values["fieldRequired"] == "yes",
+					Placeholder: *values["fieldPlaceholder"],
+				})
+				fieldString, _ := FieldInfoSliceToJSON(currentCommand.Fields)
+				formValues.Map["fields"] = &fieldString
+				commandString, _ := currentCommand.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				// A modal page cannot hold more inputs than Discord allows
+				fields, _ := JSONToFieldInfoSlice(*formValues.Map["fields"])
+				if len(fields) >= MaxModalFields {
+					return idxAccept
+				}
+				return idxFieldStart
+			},
+			BranchValueHandler: func(targetFormIndex int, targetValues Values) {
+				if targetFormIndex == idxCmdStart {
+					ResetFormValues(targetValues)
+				}
+				if targetFormIndex == idxCmdInfo {
+					ResetFormValues(targetValues)
+				}
+			},
+		}
+		forms = append(forms, wrapper)
+	}
 	{ // NOTE: idxAccept
 		values := map[string]*string{
 			"cmdAcceptConfirm": new(string),
@@ -358,7 +455,8 @@ func AddFormWrapperGenerator() []FormWrapper {
 			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
 				if *formValues.Map["cmdAcceptConfirm"] == "yes" {
 					command, _ := JSONToCmdInfo(*modelValues.Map["currentCommand"])
-					if command.Type == "slash" {
+					// Modal commands are app commands, so they live with the slash commands
+					if command.Type == "slash" || command.Type == "modal" {
 						slashCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["slashCommands"])
 						slashCommandList = append(slashCommandList, *command)
 						jsonData, _ := CmdInfoSliceToJSON(slashCommandList)
@@ -448,6 +546,7 @@ func addCmdInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 				Options(
 					huh.NewOption("slash", "slash"),
 					huh.NewOption("prefix", "prefix"),
+					huh.NewOption("modal", "modal"),
 				).
 				Validate(ValidateCommandType),
 			huh.NewSelect[string]().
@@ -480,7 +579,7 @@ func addCmdInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 }
 
 func addCmdAcceptFormGenerator(values Values, modelValues Values) *huh.Form {
-	var commandName, commandType, commandDesc, commandReturn, commandArgs string
+	var commandName, commandType, commandDesc, commandReturn, commandArgs, commandFields string
 
 	if modelValues.Map["currentCommand"] != nil && *modelValues.Map["currentCommand"] != "" {
 		currentCommand, err := JSONToCmdInfo(*modelValues.Map["currentCommand"])
@@ -499,15 +598,31 @@ func addCmdAcceptFormGenerator(values Values, modelValues Values) *huh.Form {
 			} else {
 				commandArgs = "None"
 			}
+
+			if len(currentCommand.Fields) > 0 {
+				fieldNames := make([]string, len(currentCommand.Fields))
+				for i, field := range currentCommand.Fields {
+					fieldNames[i] = fmt.Sprintf("%s (%s)", field.Name, field.Style)
+				}
+				commandFields = strings.Join(fieldNames, ", ")
+			} else {
+				commandFields = "None"
+			}
 		}
+	}
+
+	summary := fmt.Sprintf("Command Name: %s\nCommand Type: %s\nDescription: %s\nReturn Type: %s\nArguments: %v",
+		commandName, commandType, commandDesc, commandReturn, commandArgs)
+	if commandType == "modal" {
+		summary = fmt.Sprintf("Command Name: %s\nCommand Type: %s\nDescription: %s\nReturn Type: %s\nFields: %v",
+			commandName, commandType, commandDesc, commandReturn, commandFields)
 	}
 
 	cmdAcceptForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewNote().
 				Title("Command Info").
-				Description(fmt.Sprintf("Command Name: %s\nCommand Type: %s\nDescription: %s\nReturn Type: %s\nArguments: %v",
-					commandName, commandType, commandDesc, commandReturn, commandArgs)),
+				Description(summary),
 			huh.NewConfirm().
 				Title("Does everything look correct?").
 				Affirmative("yes").
@@ -580,6 +695,75 @@ func addArgInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 		),
 	)
 	return argInfoForm
+}
+
+func addFieldStartFormGenerator(values Values, modelValues Values) *huh.Form {
+	fieldStartForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Do you want to add a modal field?").
+				Affirmative("yes").
+				Negative("no").
+				Validate(func(b bool) error {
+					var s string
+					if b {
+						s = "yes"
+					} else {
+						s = "no"
+					}
+					values.Map["fieldStartConfirm"] = &s
+					return nil
+				}),
+		),
+	)
+	return fieldStartForm
+}
+
+func addFieldInfoFormGenerator(values Values, modelValues Values) *huh.Form {
+	fieldInfoForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Value(values.Map["fieldName"]).
+				Title("Enter the field name").
+				Prompt("> ").
+				Validate(func(s string) error {
+					fields, _ := JSONToFieldInfoSlice(*values.Map["fields"])
+					return ValidateFieldName(s, fields)
+				}),
+			huh.NewInput().
+				Value(values.Map["fieldLabel"]).
+				Title("Enter the field label").
+				Prompt("> ").
+				Validate(ValidateFieldLabel),
+			huh.NewSelect[string]().
+				Value(values.Map["fieldStyle"]).
+				Title("Select the field style").
+				Options(
+					huh.NewOption("short", "short"),
+					huh.NewOption("paragraph", "paragraph"),
+				).
+				Validate(ValidateFieldStyle),
+			huh.NewConfirm().
+				Title("Is the field required?").
+				Affirmative("yes").
+				Negative("no").
+				Validate(func(b bool) error {
+					var s string
+					if b {
+						s = "yes"
+					} else {
+						s = "no"
+					}
+					values.Map["fieldRequired"] = &s
+					return nil
+				}),
+			huh.NewInput().
+				Value(values.Map["fieldPlaceholder"]).
+				Title("Enter the field placeholder (optional)").
+				Prompt("> "),
+		),
+	)
+	return fieldInfoForm
 }
 
 /**

@@ -31,6 +31,9 @@ var templateFuncs = template.FuncMap{
 	"returnValue": GetReturnValue,
 	"argString":   BuildArgString,
 	"underscore":  underscoreName,
+	"modalClass":  ModalClassName,
+	"modalTitle":  modalTitle,
+	"pyBool":      pythonBool,
 }
 
 // RenderTemplate renders the named embedded template with the given data
@@ -83,6 +86,39 @@ func BuildArgString(args []ArgInfo) string {
 // underscoreName converts dashes in a command name to underscores
 func underscoreName(name string) string {
 	return strings.ReplaceAll(name, "-", "_")
+}
+
+// ModalClassName turns a command name into the class name of its generated modal
+func ModalClassName(name string) string {
+	parts := strings.FieldsFunc(name, func(r rune) bool {
+		return r == '-' || r == '_'
+	})
+
+	var builder strings.Builder
+	for _, part := range parts {
+		runes := []rune(part)
+		builder.WriteString(strings.ToUpper(string(runes[0])) + string(runes[1:]))
+	}
+	builder.WriteString("Modal")
+
+	return builder.String()
+}
+
+// modalTitle trims a command description down to Discord's 45 character modal title limit
+func modalTitle(description string) string {
+	runes := []rune(description)
+	if len(runes) <= maxFieldLabelLength {
+		return description
+	}
+	return string(runes[:maxFieldLabelLength])
+}
+
+// pythonBool renders a Go bool as a Python literal
+func pythonBool(value bool) string {
+	if value {
+		return "True"
+	}
+	return "False"
 }
 
 /*

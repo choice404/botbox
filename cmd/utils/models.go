@@ -125,6 +125,19 @@ func AddModel(callback func(*Model) []error, initCallback func(*Model, []Values)
 		if len(slashCommands) > 0 {
 			display.WriteString(s.KeyText.Render("Slash Commands:") + "\n")
 			for _, slashCommand := range slashCommands {
+				// Modal commands take no arguments, so their fields are shown instead
+				if slashCommand.Type == "modal" {
+					var fields []string
+					for _, field := range slashCommand.Fields {
+						fields = append(fields, field.Name+": "+field.Style)
+					}
+					fieldsStr := strings.Join(fields, ", ")
+
+					commandLine := slashCommand.Name + " [modal: " + fieldsStr + "] -> " + slashCommand.ReturnType
+					display.WriteString("    - " + s.ValueText.Render(commandLine) + "\n")
+					continue
+				}
+
 				var args []string
 				for _, command := range slashCommand.Args {
 					args = append(args, command.Name+": "+command.Type)

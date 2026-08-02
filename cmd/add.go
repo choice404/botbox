@@ -75,14 +75,19 @@ func runAddHeadless(cmd *cobra.Command, args []string) {
 	// Validate each command against the ones accepted before it
 	var slashCommands, prefixCommands []utils.CommandInfo
 	for i, command := range commands {
+		// Modal commands only respond through the modal, so their return type is fixed
+		if command.Type == "modal" {
+			command.ReturnType = "None"
+		}
 		if err := utils.ValidateCommand(command, commands[:i]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: command '%s': %v\n", command.Name, err)
 			os.Exit(1)
 		}
-		if command.Type == "slash" {
-			slashCommands = append(slashCommands, command)
-		} else {
+		// Modal commands are app commands, so they live with the slash commands
+		if command.Type == "prefix" {
 			prefixCommands = append(prefixCommands, command)
+		} else {
+			slashCommands = append(slashCommands, command)
 		}
 	}
 

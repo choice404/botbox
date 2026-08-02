@@ -6,6 +6,7 @@
 - [Features](#features)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Logging](#logging)
 - [License](#license)
 - [Contributors](#contributors)
 
@@ -39,6 +40,23 @@ chmod +x run.sh
 
 # Run the bot using the provided run.sh script
 ./run.sh
+```
+
+## Logging
+Logs go to stdout and to a rotating file at `logs/bot.log`, five files of five megabytes each.
+
+Two environment variables control it:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `LOG_LEVEL` | `INFO` | Any standard Python level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `LOG_DIR` | `logs` | Directory the log files are written to |
+
+Inside a cog, grab a logger with:
+```python
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 ```
 
 ## License

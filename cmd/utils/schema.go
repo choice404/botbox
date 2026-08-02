@@ -109,6 +109,7 @@ type CommandInfo struct {
 	Type        string
 	Description string
 	Args        []ArgInfo
+	Fields      []FieldInfo
 	ReturnType  string
 }
 
@@ -165,6 +166,32 @@ func JSONToArgInfoSlice(jsonString string) ([]ArgInfo, error) {
 	err := json.Unmarshal([]byte(jsonString), &slice)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON to ArgInfo slice: %w", err)
+	}
+	return slice, nil
+}
+
+// FieldInfo describes a single text input on a modal command
+type FieldInfo struct {
+	Name        string
+	Label       string
+	Style       string
+	Required    bool
+	Placeholder string
+}
+
+func FieldInfoSliceToJSON(slice []FieldInfo) (string, error) {
+	jsonData, err := json.Marshal(slice)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal FieldInfo slice to JSON: %w", err)
+	}
+	return string(jsonData), nil
+}
+
+func JSONToFieldInfoSlice(jsonString string) ([]FieldInfo, error) {
+	var slice []FieldInfo
+	err := json.Unmarshal([]byte(jsonString), &slice)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON to FieldInfo slice: %w", err)
 	}
 	return slice, nil
 }

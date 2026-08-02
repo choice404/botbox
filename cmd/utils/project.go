@@ -40,6 +40,7 @@ func CreateProject(rootDir string, values Values, force bool) error {
 	directories := []string{
 		"src",
 		"src/cogs",
+		"src/utils",
 	}
 
 	for _, dir := range directories {
@@ -208,6 +209,20 @@ func CreateProject(rootDir string, values Values, force bool) error {
 		err := renderToFile(filepath.Join(rootDir, "src", "cogs", "__init__.py"), "init.py.tmpl", data)
 		if err != nil {
 			return fmt.Errorf("error creating __init__.py file: %w", err)
+		}
+	}
+
+	if loggerOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "utils", "logger.py"), force); err == nil && loggerOpt {
+		err := renderToFile(filepath.Join(rootDir, "src", "utils", "logger.py"), "logger.py.tmpl", data)
+		if err != nil {
+			return fmt.Errorf("error creating logger.py file: %w", err)
+		}
+	}
+
+	if utilsInitOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "utils", "__init__.py"), force); err == nil && utilsInitOpt {
+		err := renderToFile(filepath.Join(rootDir, "src", "utils", "__init__.py"), "utils_init.py.tmpl", data)
+		if err != nil {
+			return fmt.Errorf("error creating utils __init__.py file: %w", err)
 		}
 	}
 
