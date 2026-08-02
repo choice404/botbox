@@ -56,6 +56,9 @@ func UpgradeConfig() (*UpgradeResult, error) {
 		upgradedConfig.BotBox.Version = strings.TrimPrefix(Version, "v")
 	}
 
+	// Configs written before help_style existed get the default so the key is always present
+	upgradedConfig.BotInfo.HelpStyle = NormalizeHelpStyle(upgradedConfig.BotInfo.HelpStyle)
+
 	result := &UpgradeResult{
 		UpgradedCogs: []string{},
 		Errors:       []string{},

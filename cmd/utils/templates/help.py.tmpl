@@ -1,0 +1,244 @@
+"""
+Bot Author: <<.Author>>
+
+<<.Name>>
+<<.Description>>
+"""
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+from dotenv import load_dotenv
+from utils.logger import get_logger
+import json
+import os
+
+load_dotenv()
+
+logger = get_logger(__name__)
+
+GUILD_ID = int(os.getenv('DISCORD_GUILD', 0))
+GUILD = discord.Object(id=GUILD_ID)
+
+COMMANDS_PER_PAGE = 8
+VIEW_TIMEOUT_SECONDS = 120
+
+
+def load_help_style() -> str:
+    """
+    Reads the help style from botbox.conf on every call so config changes apply without a restart.
+
+        Returns:
+            str: Either "compact" or "detailed", falling back to "compact"
+    """
+
+    try:
+        with open('botbox.conf', 'r') as f:
+            config = json.load(f)
+        style = config.get('bot', {}).get('help_style', 'compact')
+    except Exception as e:
+        logger.error(f"Failed to read help_style from botbox.conf: {e}")
+        return 'compact'
+
+    return style if style in ('compact', 'detailed') else 'compact'
+
+
+def format_slash_command(command: app_commands.Command, style: str) -> str:
+    """
+    Formats one slash command as a single help line.
+
+        Parameters:
+            command (app_commands.Command): The slash command to format
+            style (str): Either "compact" or "detailed"
+
+        Returns:
+            str: The formatted help line
+    """
+
+    description = command.description or 'No description'
+    if style == 'detailed' and command.parameters:
+        params = ' '.join(f"<{param.name}: {param.type.name}>" for param in command.parameters)
+        return f"/{command.name} {params} - {description}"
+    return f"/{command.name} - {description}"
+
+
+def format_prefix_command(command: commands.Command, prefix: str, style: str) -> str:
+    """
+    Formats one prefix command as a single help line.
+
+        Parameters:
+            command (commands.Command): The prefix command to format
+            prefix (str): The bot's command prefix
+            style (str): Either "compact" or "detailed"
+
+        Returns:
+            str: The formatted help line
+    """
+
+    description = command.short_doc or 'No description'
+    if style == 'detailed':
+        usage = f"{prefix}{command.qualified_name} {command.signature}".strip()
+        return f"{usage} - {description}"
+    return f"{prefix}{command.qualified_name} - {description}"
+
+
+def slash_command_visible(command: app_commands.Command, interaction: discord.Interaction) -> bool:
+    """
+    Decides whether a slash command should appear in help for this user.
+
+        Parameters:
+            command (app_commands.Command): The slash command to check
+            interaction (discord.Interaction): The interaction that requested help
+
+        Returns:
+            bool: True when the command should be listed
+    """
+
+    if command.name == 'help':
+        return True
+
+    required = command.default_permissions
+    if required is None:
+        return True
+
+    if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+        return False
+
+    return interaction.user.guild_permissions.is_superset(required)
+
+
+async def prefix_command_visible(command: commands.Command, ctx) -> bool:
+    """
+    Decides whether a prefix command should appear in help for this user.
+
+        Parameters:
+            command (commands.Command): The prefix command to check
+            ctx (commands.Context | None): A context built from the help interaction
+
+        Returns:
+            bool: True when the command should be listed
+    """
+
+    if command.hidden:
+        return False
+
+    if ctx is None:
+        return not command.checks
+
+    try:
+        return await command.can_run(ctx)
+    except Exception:
+        return False
+
+
+class HelpView(discord.ui.View):
+    def __init__(self, pages: list) -> None:
+        super().__init__(timeout=VIEW_TIMEOUT_SECONDS)
+        self.pages = pages
+        self.index = 0
+        self.message = None
+        self.update_buttons()
+
+    def update_buttons(self) -> None:
+        self.previous_page.disabled = self.index <= 0
+        self.next_page.disabled = self.index >= len(self.pages) - 1
+
+    async def show_page(self, interaction: discord.Interaction) -> None:
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.pages[self.index], view=self)
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        if self.message is not None:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
+    @discord.ui.button(label='Previous', style=discord.ButtonStyle.secondary)
+    async def previous_page(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if self.index > 0:
+            self.index -= 1
+        await self.show_page(interaction)
+
+    @discord.ui.button(label='Next', style=discord.ButtonStyle.secondary)
+    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if self.index < len(self.pages) - 1:
+            self.index += 1
+        await self.show_page(interaction)
+
+
+class Help(commands.Cog):
+    def __init__(self, bot) -> None:
+        self.bot = bot
+
+    @app_commands.command(name="help", description="Shows all bot commands")
+    @app_commands.guilds(GUILD)
+    async def help(self, interaction: discord.Interaction) -> None:
+        """
+        Shows the commands the user is allowed to run, one page per cog.
+
+            Parameters:
+                interaction (discord.Interaction): The interaction object that triggered the command
+
+            Returns:
+                None
+        """
+
+        try:
+            style = load_help_style()
+
+            command_prefix = self.bot.command_prefix if isinstance(self.bot.command_prefix, str) else '!'
+
+            ctx = None
+            try:
+                ctx = await commands.Context.from_interaction(interaction)
+            except Exception:
+                ctx = None
+
+            pages = []
+            for cog_name, cog in self.bot.cogs.items():
+                lines = []
+                for slash_command in cog.get_app_commands():
+                    if slash_command_visible(slash_command, interaction):
+                        lines.append(format_slash_command(slash_command, style))
+                for prefix_command in cog.get_commands():
+                    if await prefix_command_visible(prefix_command, ctx):
+                        lines.append(format_prefix_command(prefix_command, command_prefix, style))
+
+                if not lines:
+                    continue
+
+                for start in range(0, len(lines), COMMANDS_PER_PAGE):
+                    chunk = lines[start:start + COMMANDS_PER_PAGE]
+                    embed = discord.Embed(
+                        title=f"{cog_name} commands",
+                        description="\n".join(chunk),
+                        color=discord.Color.blurple(),
+                    )
+                    pages.append(embed)
+
+            if not pages:
+                await interaction.response.send_message("No commands available.", ephemeral=True)
+                return
+
+            for page_number, embed in enumerate(pages, start=1):
+                embed.set_footer(text=f"Page {page_number} of {len(pages)}")
+
+            view = HelpView(pages)
+            await interaction.response.send_message(embed=pages[0], view=view, ephemeral=True)
+            view.message = await interaction.original_response()
+        except Exception as e:
+            logger.error(f"Error: {e}")
+            if interaction.response.is_done():
+                await interaction.followup.send(f"Error: {e}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"Error: {e}", ephemeral=True)
+
+async def setup(bot):
+    await bot.add_cog(Help(bot))
+
+"""
+File generated by BotBox - https://github.com/choice404/botbox
+"""

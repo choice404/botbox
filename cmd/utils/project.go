@@ -25,6 +25,16 @@ type projectTemplateData struct {
 	Guild       string
 	Project     string
 	Config      string
+	// HelpStyle is written into botbox.conf and read by the generated help cog
+	HelpStyle string
+}
+
+// optionalValue reads a value off the model values bus, falling back when the key is absent
+func optionalValue(values Values, key, fallback string) string {
+	if v, ok := values.Map[key]; ok && v != nil && *v != "" {
+		return *v
+	}
+	return fallback
 }
 
 // renderToFile renders the named template and writes the result to path
@@ -65,6 +75,7 @@ func CreateProject(rootDir string, values Values, force bool) error {
 		Guild:       *values.Map["botGuildDopplerEnv"],
 		Project:     *values.Map["botTokenDopplerProject"],
 		Config:      *values.Map["botGuildDopplerEnv"],
+		HelpStyle:   NormalizeHelpStyle(optionalValue(values, "helpStyle", DefaultHelpStyle)),
 	}
 
 	if confOpt, err := CreateFileOption(filepath.Join(rootDir, "botbox.conf"), force); err == nil && confOpt {
@@ -191,6 +202,28 @@ func CreateProject(rootDir string, values Values, force bool) error {
 		err = os.Chmod(filepath.Join(rootDir, "src", "cogs", "helloWorld.py"), 0755)
 		if err != nil {
 			return fmt.Errorf("Error setting permissions for helloWorld.py file: %v\n", err)
+		}
+	}
+
+	if helpOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "cogs", "help.py"), force); err == nil && helpOpt {
+		err := renderToFile(filepath.Join(rootDir, "src", "cogs", "help.py"), "help.py.tmpl", data)
+		if err != nil {
+			return fmt.Errorf("Error creating help.py file: %v\n", err)
+		}
+		err = os.Chmod(filepath.Join(rootDir, "src", "cogs", "help.py"), 0755)
+		if err != nil {
+			return fmt.Errorf("Error setting permissions for help.py file: %v\n", err)
+		}
+	}
+
+	if adminOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "cogs", "admin.py"), force); err == nil && adminOpt {
+		err := renderToFile(filepath.Join(rootDir, "src", "cogs", "admin.py"), "admin.py.tmpl", data)
+		if err != nil {
+			return fmt.Errorf("Error creating admin.py file: %v\n", err)
+		}
+		err = os.Chmod(filepath.Join(rootDir, "src", "cogs", "admin.py"), 0755)
+		if err != nil {
+			return fmt.Errorf("Error setting permissions for admin.py file: %v\n", err)
 		}
 	}
 

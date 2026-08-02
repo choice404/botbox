@@ -1,0 +1,195 @@
+"""
+Bot Author: <<.Author>>
+
+<<.Name>>
+<<.Description>>
+"""
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+from dotenv import load_dotenv
+from utils.logger import get_logger
+import json
+import os
+import platform
+
+load_dotenv()
+
+logger = get_logger(__name__)
+
+GUILD_ID = int(os.getenv('DISCORD_GUILD', 0))
+GUILD = discord.Object(id=GUILD_ID)
+
+
+def parse_owner_ids() -> set:
+    """
+    Reads the comma separated OWNER_IDS environment variable.
+
+        Returns:
+            set: The owner ids as integers, empty when the variable is unset
+    """
+
+    raw = os.getenv('OWNER_IDS', '')
+    return {int(part.strip()) for part in raw.split(',') if part.strip().isdigit()}
+
+
+def format_uptime(delta) -> str:
+    """
+    Formats a timedelta as Xd Yh Zm Ws.
+
+        Parameters:
+            delta (datetime.timedelta): The elapsed time to format
+
+        Returns:
+            str: The formatted uptime string
+    """
+
+    total_seconds = int(delta.total_seconds())
+    days, remainder = divmod(total_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{days}d {hours}h {minutes}m {seconds}s"
+
+
+class Admin(commands.Cog):
+    def __init__(self, bot) -> None:
+        self.bot = bot
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """
+        Restricts every command in this cog to the bot owners.
+
+            Parameters:
+                interaction (discord.Interaction): The interaction to check
+
+            Returns:
+                bool: True when the user is listed in OWNER_IDS or owns the bot
+        """
+
+        owner_ids = parse_owner_ids()
+        if interaction.user.id in owner_ids:
+            return True
+        return await self.bot.is_owner(interaction.user)
+
+    @app_commands.command(name="sync", description="Syncs slash commands with Discord")
+    @app_commands.guilds(GUILD)
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(scope="Where to sync commands: guild or global")
+    @app_commands.choices(scope=[
+        app_commands.Choice(name="guild", value="guild"),
+        app_commands.Choice(name="global", value="global"),
+    ])
+    async def sync(self, interaction: discord.Interaction, scope: str) -> None:
+        """
+        Forces a slash command sync and reports how many commands were synced.
+
+            Parameters:
+                interaction (discord.Interaction): The interaction object that triggered the command
+                scope (str): Where to sync commands, guild or global
+
+            Returns:
+                None
+        """
+
+        await interaction.response.defer(ephemeral=True)
+        try:
+            guild_count, global_count = await self.bot.syncing(force=True)
+        except Exception as e:
+            logger.error(f"Failed to sync commands: {e}")
+            await interaction.followup.send(f"Failed to sync commands: {e}", ephemeral=True)
+            return
+
+        if scope == "guild":
+            await interaction.followup.send(f"Synced {guild_count} guild command(s).", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Synced {global_count} global command(s).", ephemeral=True)
+
+    @app_commands.command(name="status", description="Shows bot status information")
+    @app_commands.guilds(GUILD)
+    @app_commands.default_permissions(administrator=True)
+    async def status(self, interaction: discord.Interaction) -> None:
+        """
+        Shows uptime, latency, and counts for guilds, users, and cogs.
+
+            Parameters:
+                interaction (discord.Interaction): The interaction object that triggered the command
+
+            Returns:
+                None
+        """
+
+        try:
+            embed = discord.Embed(title=f"{self.bot.user.name} status", color=discord.Color.blurple())
+            embed.add_field(name="Uptime", value=format_uptime(discord.utils.utcnow() - self.bot.launch_time), inline=True)
+            embed.add_field(name="Latency", value=f"{self.bot.latency * 1000:.0f} ms", inline=True)
+            embed.add_field(name="Guilds", value=str(len(self.bot.guilds)), inline=True)
+            embed.add_field(name="Users", value=str(len(self.bot.users)), inline=True)
+            embed.add_field(name="Loaded cogs", value=str(len(self.bot.cogs)), inline=True)
+            embed.add_field(name="Python", value=platform.python_version(), inline=True)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error: {e}")
+            await interaction.response.send_message(f"Error: {e}", ephemeral=True)
+
+    @app_commands.command(name="uptime", description="Shows how long the bot has been online")
+    @app_commands.guilds(GUILD)
+    @app_commands.default_permissions(administrator=True)
+    async def uptime(self, interaction: discord.Interaction) -> None:
+        """
+        Shows the elapsed time since the bot started.
+
+            Parameters:
+                interaction (discord.Interaction): The interaction object that triggered the command
+
+            Returns:
+                None
+        """
+
+        try:
+            elapsed = format_uptime(discord.utils.utcnow() - self.bot.launch_time)
+            await interaction.response.send_message(f"Online for {elapsed}", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error: {e}")
+            await interaction.response.send_message(f"Error: {e}", ephemeral=True)
+
+    @app_commands.command(name="set-prefix", description="Sets the bot command prefix")
+    @app_commands.guilds(GUILD)
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(prefix="Single non alphanumeric character to use as the prefix")
+    async def set_prefix(self, interaction: discord.Interaction, prefix: str) -> None:
+        """
+        Changes the prefix on the running bot and writes it back to botbox.conf.
+
+            Parameters:
+                interaction (discord.Interaction): The interaction object that triggered the command
+                prefix (str): Single non alphanumeric character to use as the prefix
+
+            Returns:
+                None
+        """
+
+        if len(prefix) != 1 or prefix.isalnum():
+            await interaction.response.send_message("The prefix must be a single non alphanumeric character.", ephemeral=True)
+            return
+
+        try:
+            with open('botbox.conf', 'r') as f:
+                config = json.load(f)
+            config['bot']['command_prefix'] = prefix
+            with open('botbox.conf', 'w') as f:
+                json.dump(config, f, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to update botbox.conf: {e}")
+            await interaction.response.send_message(f"Failed to update botbox.conf: {e}", ephemeral=True)
+            return
+
+        self.bot.command_prefix = prefix
+        await interaction.response.send_message(f"Command prefix set to {prefix}", ephemeral=True)
+
+async def setup(bot):
+    await bot.add_cog(Admin(bot))
+
+"""
+File generated by BotBox - https://github.com/choice404/botbox
+"""

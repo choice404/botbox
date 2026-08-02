@@ -6,20 +6,61 @@
     "name": "<<.Name>>",
     "command_prefix": "<<.Prefix>>",
     "author": "<<.Author>>",
-    "description": "<<.Description>>" 
+    "description": "<<.Description>>",
+    "help_style": "<<.HelpStyle>>"
   },
   "cogs": [
     {
-      "name": "HelloWorld",
-      "file": "helloWorld",
-      "env": "development",
+      "name": "Admin",
+      "env": "production",
+      "file": "admin",
       "slash_commands": [
         {
-          "Name": "hello",
+          "Name": "sync",
           "Scope": "guild",
           "Type": "slash",
-          "Description": "Bot responds with world",
+          "Description": "Syncs slash commands with Discord",
+          "Args": [
+            {
+              "Name": "scope",
+              "Type": "str",
+              "Description": "Where to sync commands: guild or global"
+            }
+          ],
+          "Fields": null,
+          "ReturnType": "None"
+        },
+        {
+          "Name": "status",
+          "Scope": "guild",
+          "Type": "slash",
+          "Description": "Shows bot status information",
           "Args": null,
+          "Fields": null,
+          "ReturnType": "None"
+        },
+        {
+          "Name": "uptime",
+          "Scope": "guild",
+          "Type": "slash",
+          "Description": "Shows how long the bot has been online",
+          "Args": null,
+          "Fields": null,
+          "ReturnType": "None"
+        },
+        {
+          "Name": "set-prefix",
+          "Scope": "guild",
+          "Type": "slash",
+          "Description": "Sets the bot command prefix",
+          "Args": [
+            {
+              "Name": "prefix",
+              "Type": "str",
+              "Description": "Single non alphanumeric character to use as the prefix"
+            }
+          ],
+          "Fields": null,
           "ReturnType": "None"
         }
       ],
@@ -27,8 +68,8 @@
     },
     {
       "name": "CogManagement",
-      "file": "cogs",
       "env": "production",
+      "file": "cogs",
       "slash_commands": [
         {
           "Name": "reload-cog",
@@ -36,12 +77,13 @@
           "Type": "slash",
           "Description": "Reloads a cog by name",
           "Args": [
-          {
-            "Name": "cog_name",
-            "Type": "str",
-            "Description": "The name of the cog to reload (without .py cog)"
-          }
+            {
+              "Name": "cog_name",
+              "Type": "str",
+              "Description": "The name of the cog to reload (without .py cog)"
+            }
           ],
+          "Fields": null,
           "ReturnType": "None"
         },
         {
@@ -50,6 +92,7 @@
           "Type": "slash",
           "Description": "Reloads all cogs",
           "Args": null,
+          "Fields": null,
           "ReturnType": "None"
         },
         {
@@ -58,6 +101,7 @@
           "Type": "slash",
           "Description": "Lists all available cogs",
           "Args": null,
+          "Fields": null,
           "ReturnType": "None"
         },
         {
@@ -66,12 +110,13 @@
           "Type": "slash",
           "Description": "Unloads a cog by name",
           "Args": [
-          {
-            "Name": "cog_name",
-            "Type": "str",
-            "Description": "The name of the cog to unload (without .py cog)"
-          }
+            {
+              "Name": "cog_name",
+              "Type": "str",
+              "Description": "The name of the cog to unload (without .py cog)"
+            }
           ],
+          "Fields": null,
           "ReturnType": "None"
         },
         {
@@ -80,12 +125,47 @@
           "Type": "slash",
           "Description": "Loads a cog by name",
           "Args": [
-          {
-            "Name": "cog_name",
-            "Type": "str",
-            "Description": "The name of the cog to load (without .py cog)"
-          }
+            {
+              "Name": "cog_name",
+              "Type": "str",
+              "Description": "The name of the cog to load (without .py cog)"
+            }
           ],
+          "Fields": null,
+          "ReturnType": "None"
+        }
+      ],
+      "prefix_commands": []
+    },
+    {
+      "name": "HelloWorld",
+      "env": "development",
+      "file": "helloWorld",
+      "slash_commands": [
+        {
+          "Name": "hello",
+          "Scope": "guild",
+          "Type": "slash",
+          "Description": "Bot responds with world",
+          "Args": null,
+          "Fields": null,
+          "ReturnType": "None"
+        }
+      ],
+      "prefix_commands": []
+    },
+    {
+      "name": "Help",
+      "env": "production",
+      "file": "help",
+      "slash_commands": [
+        {
+          "Name": "help",
+          "Scope": "guild",
+          "Type": "slash",
+          "Description": "Shows all bot commands",
+          "Args": null,
+          "Fields": null,
           "ReturnType": "None"
         }
       ],

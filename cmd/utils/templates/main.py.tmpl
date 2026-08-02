@@ -6,6 +6,7 @@ Bot Author: <<.Author>>
 """
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 from utils.logger import setup_logging, get_logger
@@ -20,15 +21,27 @@ class Bot(commands.Bot):
         self.environments = os.getenv('ENVIRONMENTS', 'production,development').split(',')
         intents = discord.Intents.all()
         intents.message_content = True
-        super().__init__(command_prefix = config['bot']['command_prefix'], intents=intents, help_command = None)
+        extra_options = {}
+        owner_ids = {int(part.strip()) for part in os.getenv('OWNER_IDS', '').split(',') if part.strip().isdigit()}
+        if owner_ids:
+            extra_options['owner_ids'] = owner_ids
+        super().__init__(command_prefix = config['bot']['command_prefix'], intents=intents, help_command = None, **extra_options)
         self.guild = discord.Object(id=int(os.getenv("DISCORD_GUILD", 0)))
         self.synced = False
+        self.launch_time = discord.utils.utcnow()
 
-    async def syncing(self):
-        if not self.synced:
-            await self.tree.sync()
+    async def syncing(self, force=False):
+        guild_count = 0
+        global_count = 0
+        if force or not self.synced:
+            if self.guild.id:
+                guild_synced = await self.tree.sync(guild=self.guild)
+                guild_count = len(guild_synced)
+            global_synced = await self.tree.sync()
+            global_count = len(global_synced)
             self.synced = True
-        logger.info(f"Synced slash commands for {self.user}")
+            logger.info(f"Synced slash commands for {self.user}")
+        return guild_count, global_count
 
     async def on_command_error(self, ctx, error):
         await ctx.reply(error, ephemeral = True)
@@ -39,6 +52,18 @@ logger = get_logger("bot")
 bot = Bot()
 TOKEN = str(os.getenv('DISCORD_TOKEN'))
 GUILD = os.getenv('DISCORD_GUILD')
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, (app_commands.CheckFailure, app_commands.MissingPermissions)):
+        message = "You do not have permission to use this command."
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
+        return
+    command_name = interaction.command.name if interaction.command else "unknown"
+    logger.error(f"App command error in {command_name}: {error}")
 
 @bot.event
 async def on_ready():

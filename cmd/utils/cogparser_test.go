@@ -134,6 +134,56 @@ func TestParseCogFile(t *testing.T) {
 			},
 		},
 		{
+			name: "default permissions and choices decorators do not disturb parsing",
+			file: "adminCog",
+			want: ParsedCogInfo{
+				FileName:    "adminCog",
+				CogName:     "AdminCog",
+				Author:      "Austin Choi",
+				ProjectName: "TestBot",
+				Description: "A discord bot used by the parser tests",
+				SlashCommands: []CommandInfo{
+					{
+						Name:        "sync",
+						Scope:       "guild",
+						Type:        "slash",
+						Description: "Syncs slash commands with Discord",
+						ReturnType:  "None",
+						Args: []ArgInfo{
+							{Name: "scope", Type: "str", Description: "Where to sync commands: guild or global"},
+						},
+					},
+					{
+						Name:        "uptime",
+						Scope:       "guild",
+						Type:        "slash",
+						Description: "Shows how long the bot has been online",
+						ReturnType:  "None",
+					},
+				},
+			},
+		},
+		{
+			name: "help cog with a view class before the cog class",
+			file: "helpCog",
+			want: ParsedCogInfo{
+				FileName:    "helpCog",
+				CogName:     "HelpCog",
+				Author:      "Austin Choi",
+				ProjectName: "TestBot",
+				Description: "A discord bot used by the parser tests",
+				SlashCommands: []CommandInfo{
+					{
+						Name:        "help",
+						Scope:       "guild",
+						Type:        "slash",
+						Description: "Shows all bot commands",
+						ReturnType:  "None",
+					},
+				},
+			},
+		},
+		{
 			name: "decorators the command regex cannot match",
 			file: "oddShape",
 			want: ParsedCogInfo{
@@ -175,6 +225,8 @@ func TestParseAllCogFiles(t *testing.T) {
 		"emptyName":     false,
 		"oddShape":      false,
 		"modalCog":      false,
+		"adminCog":      false,
+		"helpCog":       false,
 	}
 
 	if len(parsed) != len(want) {

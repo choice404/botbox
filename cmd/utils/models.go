@@ -30,6 +30,7 @@ func CreateModel(callback func(*Model) []error) Model {
 		"botTokenDopplerProject": new(string),
 		"botGuildDopplerEnv":     new(string),
 		"licenseType":            new(string),
+		"helpStyle":              new(string),
 	}
 
 	m.ModelValues = Values{
@@ -72,6 +73,7 @@ func InitModel(callback func(*Model) []error) Model {
 		"botTokenDopplerProject": new(string),
 		"botGuildDopplerEnv":     new(string),
 		"licenseType":            new(string),
+		"helpStyle":              new(string),
 	}
 
 	m.ModelValues = Values{

@@ -108,6 +108,32 @@ func TestValidateLicense(t *testing.T) {
 	}
 }
 
+func TestValidateHelpStyle(t *testing.T) {
+	for _, valid := range []string{"compact", "detailed"} {
+		if err := ValidateHelpStyle(valid); err != nil {
+			t.Errorf("%q should be valid, got %v", valid, err)
+		}
+	}
+	if err := ValidateHelpStyle(""); err == nil {
+		t.Error("empty should be invalid")
+	}
+	if err := ValidateHelpStyle("verbose"); err == nil {
+		t.Error("unknown help style should be invalid")
+	}
+	if err := ValidateHelpStyle("Compact"); err == nil {
+		t.Error("help style should be case sensitive")
+	}
+}
+
+func TestNormalizeHelpStyle(t *testing.T) {
+	if got := NormalizeHelpStyle(""); got != DefaultHelpStyle {
+		t.Errorf("empty help style should normalize to %q, got %q", DefaultHelpStyle, got)
+	}
+	if got := NormalizeHelpStyle("detailed"); got != "detailed" {
+		t.Errorf("set help style should be kept, got %q", got)
+	}
+}
+
 func TestValidateCommand(t *testing.T) {
 	valid := CommandInfo{
 		Name:        "greet",

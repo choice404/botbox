@@ -263,6 +263,15 @@ func SetLocalConfigValue(key string, value any) error {
 		} else {
 			return fmt.Errorf("bot.author must be a string")
 		}
+	case "bot.help_style":
+		str, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("bot.help_style must be a string")
+		}
+		if err := ValidateHelpStyle(str); err != nil {
+			return err
+		}
+		config.BotInfo.HelpStyle = str
 	default:
 		return fmt.Errorf("invalid local config key: %s", key)
 	}
@@ -285,6 +294,9 @@ func GetLocalConfigValue(key string) (any, error) {
 		return config.BotInfo.CommandPrefix, nil
 	case "bot.author":
 		return config.BotInfo.Author, nil
+	case "bot.help_style":
+		// Projects created before this key existed report the default
+		return NormalizeHelpStyle(config.BotInfo.HelpStyle), nil
 	default:
 		return nil, fmt.Errorf("invalid local config key: %s", key)
 	}

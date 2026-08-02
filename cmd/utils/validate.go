@@ -19,7 +19,11 @@ var (
 	validArgTypes      = []string{"str", "int", "float", "bool", "discord.Member", "discord.Role"}
 	validFieldStyles   = []string{"short", "paragraph"}
 	validLicenses      = []string{"mit", "apache-2.0", "gpl-3.0", "bsd-3-clause", "unlicense", "no-license"}
+	validHelpStyles    = []string{"compact", "detailed"}
 )
+
+// DefaultHelpStyle is used when a project predates the help_style key or leaves it unset
+const DefaultHelpStyle = "compact"
 
 // Discord allows at most five text inputs on a single modal page
 const MaxModalFields = 5
@@ -111,6 +115,24 @@ func ValidateLicense(s string) error {
 		return fmt.Errorf("license must be one of %s", strings.Join(validLicenses, ", "))
 	}
 	return nil
+}
+
+func ValidateHelpStyle(s string) error {
+	if s == "" {
+		return fmt.Errorf("Please select a help style")
+	}
+	if !contains(validHelpStyles, s) {
+		return fmt.Errorf("help style must be one of %s", strings.Join(validHelpStyles, ", "))
+	}
+	return nil
+}
+
+// NormalizeHelpStyle turns an unset help style into the default so readers never see ""
+func NormalizeHelpStyle(s string) string {
+	if s == "" {
+		return DefaultHelpStyle
+	}
+	return s
 }
 
 func ValidateCommandName(s string, existing []CommandInfo) error {

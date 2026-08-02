@@ -25,6 +25,7 @@ func CreateFormWrapperGenerator() []FormWrapper {
 		"botTokenDopplerProject": new(string),
 		"botGuildDopplerEnv":     new(string),
 		"licenseType":            new(string),
+		"helpStyle":              new(string),
 	}
 
 	wrapper := FormWrapper{
@@ -59,6 +60,9 @@ func CreateFormWrapperGenerator() []FormWrapper {
 			}
 			if formValues.Map["licenseType"] != nil {
 				*modelValues.Map["licenseType"] = *formValues.Map["licenseType"]
+			}
+			if formValues.Map["helpStyle"] != nil {
+				*modelValues.Map["helpStyle"] = *formValues.Map["helpStyle"]
 			}
 		},
 	}
@@ -148,6 +152,15 @@ func createFormGenerator(values Values, modelValues Values) *huh.Form {
 				).
 				Value(values.Map["licenseType"]).
 				Validate(ValidateLicense),
+
+			huh.NewSelect[string]().
+				Title("How should the generated help command format its output?").
+				Options(
+					huh.NewOption("Compact", "compact"),
+					huh.NewOption("Detailed", "detailed"),
+				).
+				Value(values.Map["helpStyle"]).
+				Validate(ValidateHelpStyle),
 		),
 	).
 		WithWidth(100).

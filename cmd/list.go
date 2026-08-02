@@ -84,7 +84,7 @@ func handleLocalConfigList() error {
 	}
 
 	keys := []string{
-		"bot.name", "bot.description", "bot.command_prefix", "bot.author",
+		"bot.name", "bot.description", "bot.command_prefix", "bot.author", "bot.help_style",
 	}
 
 	fmt.Println("Local Configuration:")

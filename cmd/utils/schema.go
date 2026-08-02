@@ -53,6 +53,9 @@ type BotConfig struct {
 	CommandPrefix string `json:"command_prefix"`
 	Author        string `json:"author"`
 	Description   string `json:"description"`
+	// HelpStyle controls how the generated help command formats its output,
+	// configs written before this key existed unmarshal to "" and are read as compact
+	HelpStyle string `json:"help_style"`
 }
 
 type CogConfig struct {
