@@ -131,61 +131,109 @@ func AddModel(callback func(*Model) []error, initCallback func(*Model, []Values)
 		display.WriteString(s.KeyText.Render("Cog Name: ") + s.ValueText.Render(*m.ModelValues.Map["filename"]) + "\n")
 		slashCommands, _ := JSONToCmdInfoSlice(*m.ModelValues.Map["slashCommands"])
 		prefixCommands, _ := JSONToCmdInfoSlice(*m.ModelValues.Map["prefixCommands"])
-		// Commands that declare expected responses get a marker after their signature
-		responsesMark := func(command CommandInfo) string {
-			if len(command.Responses) == 0 {
-				return ""
-			}
-			return fmt.Sprintf(" [responses: %d]", len(command.Responses))
-		}
-		if len(slashCommands) > 0 {
-			display.WriteString(s.KeyText.Render("Slash Commands:") + "\n")
-			for _, slashCommand := range slashCommands {
-				// Modal commands take no arguments, so their fields or pages are shown instead
-				if slashCommand.Type == "modal" {
-					var modalStr string
-					if len(slashCommand.Pages) > 0 {
-						modalStr = fmt.Sprintf("%d pages", len(slashCommand.Pages))
-					} else {
-						var fields []string
-						for _, field := range slashCommand.Fields {
-							fields = append(fields, field.Name+": "+field.Style)
-						}
-						modalStr = strings.Join(fields, ", ")
-					}
-
-					commandLine := slashCommand.Name + " [modal: " + modalStr + "] -> " + slashCommand.ReturnType + responsesMark(slashCommand)
-					display.WriteString("    - " + s.ValueText.Render(commandLine) + "\n")
-					continue
-				}
-
-				var args []string
-				for _, command := range slashCommand.Args {
-					args = append(args, command.Name+": "+command.Type)
-				}
-				argsStr := strings.Join(args, ", ")
-
-				commandLine := slashCommand.Name + "(" + argsStr + ") -> " + slashCommand.ReturnType + responsesMark(slashCommand)
-				display.WriteString("    - " + s.ValueText.Render(commandLine) + "\n")
-			}
-		}
-		if len(prefixCommands) > 0 {
-			display.WriteString(s.KeyText.Render("Prefix Commands:") + "\n")
-			for _, prefixCommand := range prefixCommands {
-				var args []string
-				for _, command := range prefixCommand.Args {
-					args = append(args, command.Name+": "+command.Type)
-				}
-				argsStr := strings.Join(args, ", ")
-
-				commandLine := prefixCommand.Name + "(" + argsStr + ") -> " + prefixCommand.ReturnType + responsesMark(prefixCommand)
-				display.WriteString("    - " + s.ValueText.Render(commandLine) + "\n")
-			}
-		}
+		writeCommandLists(s, &display, slashCommands, prefixCommands)
 		return display.String()
 	}
 
 	m.forms = addForms
+
+	return m
+}
+
+// writeCommandLists renders the slash and prefix command lines shared by the add and edit summaries
+func writeCommandLists(s *Styles, display *strings.Builder, slashCommands, prefixCommands []CommandInfo) {
+	// Commands that declare expected responses get a marker after their signature
+	responsesMark := func(command CommandInfo) string {
+		if len(command.Responses) == 0 {
+			return ""
+		}
+		return fmt.Sprintf(" [responses: %d]", len(command.Responses))
+	}
+	if len(slashCommands) > 0 {
+		display.WriteString(s.KeyText.Render("Slash Commands:") + "\n")
+		for _, slashCommand := range slashCommands {
+			// Modal commands take no arguments, so their fields or pages are shown instead
+			if slashCommand.Type == "modal" {
+				var modalStr string
+				if len(slashCommand.Pages) > 0 {
+					modalStr = fmt.Sprintf("%d pages", len(slashCommand.Pages))
+				} else {
+					var fields []string
+					for _, field := range slashCommand.Fields {
+						fields = append(fields, field.Name+": "+field.Style)
+					}
+					modalStr = strings.Join(fields, ", ")
+				}
+
+				commandLine := slashCommand.Name + " [modal: " + modalStr + "] -> " + slashCommand.ReturnType + responsesMark(slashCommand)
+				display.WriteString("    - " + s.ValueText.Render(commandLine) + "\n")
+				continue
+			}
+
+			var args []string
+			for _, command := range slashCommand.Args {
+				args = append(args, command.Name+": "+command.Type)
+			}
+			argsStr := strings.Join(args, ", ")
+
+			commandLine := slashCommand.Name + "(" + argsStr + ") -> " + slashCommand.ReturnType + responsesMark(slashCommand)
+			display.WriteString("    - " + s.ValueText.Render(commandLine) + "\n")
+		}
+	}
+	if len(prefixCommands) > 0 {
+		display.WriteString(s.KeyText.Render("Prefix Commands:") + "\n")
+		for _, prefixCommand := range prefixCommands {
+			var args []string
+			for _, command := range prefixCommand.Args {
+				args = append(args, command.Name+": "+command.Type)
+			}
+			argsStr := strings.Join(args, ", ")
+
+			commandLine := prefixCommand.Name + "(" + argsStr + ") -> " + prefixCommand.ReturnType + responsesMark(prefixCommand)
+			display.WriteString("    - " + s.ValueText.Render(commandLine) + "\n")
+		}
+	}
+}
+
+func EditModel(callback func(*Model) []error, initCallback func(*Model, []Values)) Model {
+	m := Model{width: maxWidth}
+	m.title = "Edit a Cog"
+	m.lg = lipgloss.DefaultRenderer()
+	m.styles = NewStyles(m.lg)
+	m.currentFormPtr = 0
+	m.state = 0
+	m.callback = callback
+	m.initCallback = initCallback
+	m.forms = EditFormWrapperGenerator()
+
+	m.ModelValues.Map = map[string]*string{
+		"cogName":         new(string),
+		"cogEnv":          new(string),
+		"backup":          new(string),
+		"editingOriginal": new(string),
+		"currentCommand":  new(string),
+		"currentPage":     new(string),
+		"pages":           new(string),
+		"slashCommands":   new(string),
+		"prefixCommands":  new(string),
+	}
+
+	emptyPages := "[]"
+	m.ModelValues.Map["pages"] = &emptyPages
+	// The tui always keeps a backup, only the headless flag can turn it off
+	backupDefault := "yes"
+	m.ModelValues.Map["backup"] = &backupDefault
+
+	m.displayCallback = func() string {
+		s := m.styles
+		var display strings.Builder
+		display.WriteString(s.HeaderText.Render("Cog queued to update") + "\n\n")
+		display.WriteString(s.KeyText.Render("Cog Name: ") + s.ValueText.Render(*m.ModelValues.Map["cogName"]) + "\n")
+		slashCommands, _ := JSONToCmdInfoSlice(*m.ModelValues.Map["slashCommands"])
+		prefixCommands, _ := JSONToCmdInfoSlice(*m.ModelValues.Map["prefixCommands"])
+		writeCommandLists(s, &display, slashCommands, prefixCommands)
+		return display.String()
+	}
 
 	return m
 }

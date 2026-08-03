@@ -735,9 +735,52 @@ func parsePrefixCommand(lines []string, startIndex int) *CommandInfo {
 
 	parseCommandDocstring(lines, funcIndex, cmd)
 
+	// The generator appends this phrase to the docstring, stripping it keeps descriptions round trip stable
+	generatedSuffix := fmt.Sprintf(" when the user types \"/%s\"", cmd.Name)
+	cmd.Description = strings.TrimSuffix(cmd.Description, generatedSuffix)
+
+	parseDocstringArgDescriptions(lines, funcIndex, cmd)
+
 	parseCommandResponse(lines, funcIndex, cmd, prefixResponseRegex)
 
 	return cmd
+}
+
+// parseDocstringArgDescriptions fills empty arg descriptions from the docstring Parameters block,
+// prefix commands have no describe decorator so the docstring is their only source
+func parseDocstringArgDescriptions(lines []string, funcIndex int, cmd *CommandInfo) {
+	if funcIndex < 0 || len(cmd.Args) == 0 {
+		return
+	}
+
+	argLineRegex := regexp.MustCompile(`^(\w+)\s*\(([^)]*)\):\s*(.+)$`)
+
+	inDocstring := false
+	for j := funcIndex + 1; j < len(lines); j++ {
+		line := strings.TrimSpace(lines[j])
+		if strings.HasPrefix(line, `"""`) {
+			if inDocstring {
+				return
+			}
+			inDocstring = true
+			continue
+		}
+		if !inDocstring {
+			continue
+		}
+
+		matches := argLineRegex.FindStringSubmatch(line)
+		if matches == nil {
+			continue
+		}
+
+		for i := range cmd.Args {
+			if cmd.Args[i].Name == matches[1] && cmd.Args[i].Description == "" {
+				cmd.Args[i].Description = strings.TrimSpace(matches[3])
+				break
+			}
+		}
+	}
 }
 
 func parseCommandFunction(line string, cmd *CommandInfo) {

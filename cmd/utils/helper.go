@@ -209,6 +209,42 @@ func fileExists(fileName string) bool {
 	return false
 }
 
+// RegenerateCogFile rewrites a cog's .py file from its config definition,
+// writing a .py.bak copy of the current file first when backup is true
+func RegenerateCogFile(rootDir string, config Config, cog CogConfig, backup bool) error {
+	filePath := filepath.Join(rootDir, "src", "cogs", cog.File+".py")
+
+	if backup {
+		existing, err := os.ReadFile(filePath)
+		if err == nil {
+			if err := os.WriteFile(filePath+".bak", existing, 0644); err != nil {
+				return fmt.Errorf("failed to write backup file: %w", err)
+			}
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("failed to read cog file for backup: %w", err)
+		}
+	}
+
+	content, err := RenderTemplate("cog.py.tmpl", CogTemplateData{
+		Author:         config.BotInfo.Author,
+		BotName:        config.BotInfo.Name,
+		BotDescription: config.BotInfo.Description,
+		ClassName:      cog.Name,
+		Filename:       cog.File,
+		SlashCommands:  cog.SlashCommands,
+		PrefixCommands: cog.PrefixCommands,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to render cog template: %w", err)
+	}
+
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write cog file: %w", err)
+	}
+
+	return nil
+}
+
 func commandExists(commandName string, commandList []CommandInfo) bool {
 	for _, cmd := range commandList {
 		if cmd.Name == commandName {

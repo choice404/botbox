@@ -177,6 +177,11 @@ func addCallback(model *utils.Model) []error {
 	slashCommandList, _ := utils.JSONToCmdInfoSlice(*values.Map["slashCommands"])
 	prefixCommandList, _ := utils.JSONToCmdInfoSlice(*values.Map["prefixCommands"])
 
+	// Prefix commands have no guild scope in Discord, normalizing avoids sync drift
+	for i := range prefixCommandList {
+		prefixCommandList[i].Scope = "global"
+	}
+
 	filePath := filepath.Join(rootDir, "src", "cogs", fileBase+".py")
 	file, err := os.Create(filePath)
 	if err != nil {

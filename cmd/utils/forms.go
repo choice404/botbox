@@ -1552,6 +1552,1171 @@ func removeCogFormGenerator(values Values, modelValues Values) *huh.Form {
 }
 
 /**
+ * Edit Forms and Model Generators
+ */
+func EditFormWrapperGenerator() []FormWrapper {
+	// Positions of each wrapper in the returned slice, referenced by callbacks and branches
+	const (
+		idxEditSelectCog = iota
+		idxEditAction
+		idxEditCmdInfo
+		idxEditArgStart
+		idxEditArgInfo
+		idxEditFieldStart
+		idxEditFieldInfo
+		idxEditAccept
+		idxEditMultiPage
+		idxEditPageInfo
+		idxEditPageFieldStart
+		idxEditPageFieldInfo
+		idxEditBranchStart
+		idxEditBranchInfo
+		idxEditPageNext
+		idxEditModInfo
+		idxEditRedefine
+		idxEditRedefineResponses
+		idxEditResponseStart
+		idxEditResponseInfo
+		idxEditPickCommand
+		idxEditRemoveCommand
+	)
+
+	// resetCommandState clears every per command form so a new command flow starts clean
+	resetCommandState := func(modelValues Values, allForms []FormWrapper) {
+		allForms[idxEditCmdInfo].Values.Map["cmdName"] = new(string)
+		allForms[idxEditCmdInfo].Values.Map["cmdType"] = new(string)
+		allForms[idxEditCmdInfo].Values.Map["cmdScope"] = new(string)
+		allForms[idxEditCmdInfo].Values.Map["cmdDescription"] = new(string)
+		allForms[idxEditCmdInfo].Values.Map["cmdReturnType"] = new(string)
+		allForms[idxEditArgInfo].Values.Map["args"] = new(string)
+		allForms[idxEditFieldInfo].Values.Map["fields"] = new(string)
+		allForms[idxEditPageInfo].Values.Map["pageName"] = new(string)
+		allForms[idxEditPageInfo].Values.Map["pageTitle"] = new(string)
+		allForms[idxEditPageFieldInfo].Values.Map["pageFields"] = new(string)
+		allForms[idxEditPageNext].Values.Map["pages"] = new(string)
+		allForms[idxEditResponseInfo].Values.Map["responses"] = new(string)
+		emptyPages := "[]"
+		modelValues.Map["pages"] = &emptyPages
+		modelValues.Map["currentPage"] = new(string)
+		modelValues.Map["currentCommand"] = new(string)
+		modelValues.Map["editingOriginal"] = new(string)
+	}
+
+	forms := []FormWrapper{}
+	{ // NOTE: idxEditSelectCog
+		values := map[string]*string{
+			"cogName": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Select Cog",
+			Form: editSelectCogFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editSelectCogValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "cog",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				if formValues.Map["cogName"] == nil || *formValues.Map["cogName"] == "" {
+					return
+				}
+				*modelValues.Map["cogName"] = *formValues.Map["cogName"]
+				editLoadCogCommands(modelValues)
+			},
+			SkipCondition: func(modelValues Values, allForms []FormWrapper, currentIndex int) bool {
+				if modelValues.Map["cogName"] != nil && *modelValues.Map["cogName"] != "" {
+					return true
+				}
+				return false
+			},
+			SkipCallback: func(modelValues Values, allForms []FormWrapper, currentIndex int) {
+				if modelValues.Map["cogName"] != nil && *modelValues.Map["cogName"] != "" {
+					cogName := *modelValues.Map["cogName"]
+					allForms[currentIndex].Values.Map["cogName"] = &cogName
+				}
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditAction
+		values := map[string]*string{
+			"editAction": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Action",
+			Form: editActionFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editActionValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "action",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				// A fresh add starts with a clean command flow, edit prefills it later
+				if *formValues.Map["editAction"] == "add" {
+					resetCommandState(modelValues, allForms)
+				}
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				switch *formValues.Map["editAction"] {
+				case "add":
+					return idxEditCmdInfo
+				case "edit":
+					return idxEditPickCommand
+				case "remove":
+					return idxEditRemoveCommand
+				default:
+					return -2
+				}
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditCmdInfo
+		values := map[string]*string{
+			"cmdName":        new(string),
+			"cmdType":        new(string),
+			"cmdScope":       new(string),
+			"cmdDescription": new(string),
+			"cmdReturnType":  new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Add Command Info",
+			Form: addCmdInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editAddCommandInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "command",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				// Modal commands only respond through the modal, so their return type is fixed
+				returnType := *formValues.Map["cmdReturnType"]
+				if *formValues.Map["cmdType"] == "modal" {
+					returnType = "None"
+				}
+				command := CommandInfo{
+					Name:        *formValues.Map["cmdName"],
+					Type:        *formValues.Map["cmdType"],
+					Scope:       *formValues.Map["cmdScope"],
+					Description: *formValues.Map["cmdDescription"],
+					Args:        []ArgInfo{},
+					Fields:      []FieldInfo{},
+					Pages:       []PageInfo{},
+					Responses:   []ResponseInfo{},
+					ReturnType:  returnType,
+				}
+				commandString, _ := command.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				// Modal commands first decide between a single page and a multi page flow
+				if *formValues.Map["cmdType"] == "modal" {
+					return idxEditMultiPage
+				}
+				return -1
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditArgStart
+		values := map[string]*string{
+			"argStartConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Argument Start",
+			Form: addArgStartFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editArgumentStartValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "argument",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				allForms[idxEditArgInfo].Values.Map["argName"] = new(string)
+				allForms[idxEditArgInfo].Values.Map["argDescription"] = new(string)
+				allForms[idxEditArgInfo].Values.Map["argType"] = new(string)
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["argStartConfirm"] == "yes" {
+					return -1
+				}
+				return idxEditRedefineResponses
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditArgInfo
+		values := map[string]*string{
+			"args":           new(string),
+			"argName":        new(string),
+			"argDescription": new(string),
+			"argType":        new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Argument Info",
+			Form: addArgInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editArgumentInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "argument",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentCommand, _ := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+
+				currentCommand.Args = append(currentCommand.Args, ArgInfo{
+					Name:        *values["argName"],
+					Type:        *values["argType"],
+					Description: *values["argDescription"],
+				})
+				argString, _ := ArgInfoSliceToJSON(currentCommand.Args)
+				formValues.Map["args"] = &argString
+				commandString, _ := currentCommand.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+			},
+			BranchCallback: func(values Values, allForms []FormWrapper) int {
+				return idxEditArgStart
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditFieldStart
+		values := map[string]*string{
+			"fieldStartConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Field Start",
+			Form: addFieldStartFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editFieldStartValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "field",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				allForms[idxEditFieldInfo].Values.Map["fieldName"] = new(string)
+				allForms[idxEditFieldInfo].Values.Map["fieldLabel"] = new(string)
+				allForms[idxEditFieldInfo].Values.Map["fieldStyle"] = new(string)
+				allForms[idxEditFieldInfo].Values.Map["fieldRequired"] = new(string)
+				allForms[idxEditFieldInfo].Values.Map["fieldPlaceholder"] = new(string)
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["fieldStartConfirm"] == "yes" {
+					return -1
+				}
+				return idxEditRedefineResponses
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditFieldInfo
+		values := map[string]*string{
+			"fields":           new(string),
+			"fieldName":        new(string),
+			"fieldLabel":       new(string),
+			"fieldStyle":       new(string),
+			"fieldRequired":    new(string),
+			"fieldPlaceholder": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Field Info",
+			Form: addFieldInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editFieldInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "field",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentCommand, _ := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+
+				currentCommand.Fields = append(currentCommand.Fields, FieldInfo{
+					Name:        *values["fieldName"],
+					Label:       *values["fieldLabel"],
+					Style:       *values["fieldStyle"],
+					Required:    *values["fieldRequired"] == "yes",
+					Placeholder: *values["fieldPlaceholder"],
+				})
+				fieldString, _ := FieldInfoSliceToJSON(currentCommand.Fields)
+				formValues.Map["fields"] = &fieldString
+				commandString, _ := currentCommand.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				// A modal page cannot hold more inputs than Discord allows
+				fields, _ := JSONToFieldInfoSlice(*formValues.Map["fields"])
+				if len(fields) >= MaxModalFields {
+					return idxEditRedefineResponses
+				}
+				return idxEditFieldStart
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditAccept
+		values := map[string]*string{
+			"cmdAcceptConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Command Accept",
+			Form: addCmdAcceptFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editCommandAcceptValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "command",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				if *formValues.Map["cmdAcceptConfirm"] == "yes" {
+					command, _ := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+					// Modal commands are app commands, so they live with the slash commands
+					if command.Type == "slash" || command.Type == "modal" {
+						slashCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["slashCommands"])
+						slashCommandList = append(slashCommandList, *command)
+						jsonData, _ := CmdInfoSliceToJSON(slashCommandList)
+						modelValues.Map["slashCommands"] = &jsonData
+					} else if command.Type == "prefix" {
+						prefixCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["prefixCommands"])
+						prefixCommandList = append(prefixCommandList, *command)
+						jsonData, _ := CmdInfoSliceToJSON(prefixCommandList)
+						modelValues.Map["prefixCommands"] = &jsonData
+					}
+				} else if modelValues.Map["editingOriginal"] != nil && *modelValues.Map["editingOriginal"] != "" {
+					// A rejected edit restores the untouched original command
+					original, err := JSONToCmdInfo(*modelValues.Map["editingOriginal"])
+					if err == nil {
+						if original.Type == "prefix" {
+							prefixCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["prefixCommands"])
+							prefixCommandList = append(prefixCommandList, *original)
+							jsonData, _ := CmdInfoSliceToJSON(prefixCommandList)
+							modelValues.Map["prefixCommands"] = &jsonData
+						} else {
+							slashCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["slashCommands"])
+							slashCommandList = append(slashCommandList, *original)
+							jsonData, _ := CmdInfoSliceToJSON(slashCommandList)
+							modelValues.Map["slashCommands"] = &jsonData
+						}
+					}
+				}
+				// The editing marker never outlives the accept decision
+				modelValues.Map["editingOriginal"] = new(string)
+			},
+			BranchCallback: func(values Values, allForms []FormWrapper) int {
+				return idxEditAction
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditMultiPage
+		values := map[string]*string{
+			"multiPageConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Multi Page",
+			Form: addMultiPageFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editMultiPageValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				// A fresh modal command always starts with an empty page collection
+				emptyPages := "[]"
+				modelValues.Map["pages"] = &emptyPages
+				mirror := "[]"
+				allForms[idxEditPageNext].Values.Map["pages"] = &mirror
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["multiPageConfirm"] == "yes" {
+					return idxEditPageInfo
+				}
+				// A single page modal keeps the existing field loop
+				return idxEditFieldStart
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditPageInfo
+		values := map[string]*string{
+			"pageName":  new(string),
+			"pageTitle": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Page Info",
+			Form: addPageInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editPageInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				page := PageInfo{
+					Name:     *formValues.Map["pageName"],
+					Title:    *formValues.Map["pageTitle"],
+					Fields:   []FieldInfo{},
+					Branches: []BranchRule{},
+				}
+				pageString, _ := pageToJSON(page)
+				modelValues.Map["currentPage"] = &pageString
+				// Each page collects its own fields, so the accumulator starts empty
+				allForms[idxEditPageFieldInfo].Values.Map["pageFields"] = new(string)
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditPageFieldStart
+		values := map[string]*string{
+			"pageFieldStartConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Page Field Start",
+			Form: addPageFieldStartFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editPageFieldStartValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				allForms[idxEditPageFieldInfo].Values.Map["fieldName"] = new(string)
+				allForms[idxEditPageFieldInfo].Values.Map["fieldLabel"] = new(string)
+				allForms[idxEditPageFieldInfo].Values.Map["fieldStyle"] = new(string)
+				allForms[idxEditPageFieldInfo].Values.Map["fieldRequired"] = new(string)
+				allForms[idxEditPageFieldInfo].Values.Map["fieldPlaceholder"] = new(string)
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["pageFieldStartConfirm"] == "yes" {
+					return -1
+				}
+				return idxEditBranchStart
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditPageFieldInfo
+		values := map[string]*string{
+			"pageFields":       new(string),
+			"fieldName":        new(string),
+			"fieldLabel":       new(string),
+			"fieldStyle":       new(string),
+			"fieldRequired":    new(string),
+			"fieldPlaceholder": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Page Field Info",
+			Form: addPageFieldInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editPageFieldInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentPage, _ := jsonToPage(*modelValues.Map["currentPage"])
+
+				currentPage.Fields = append(currentPage.Fields, FieldInfo{
+					Name:        *formValues.Map["fieldName"],
+					Label:       *formValues.Map["fieldLabel"],
+					Style:       *formValues.Map["fieldStyle"],
+					Required:    *formValues.Map["fieldRequired"] == "yes",
+					Placeholder: *formValues.Map["fieldPlaceholder"],
+				})
+				fieldString, _ := FieldInfoSliceToJSON(currentPage.Fields)
+				formValues.Map["pageFields"] = &fieldString
+				pageString, _ := pageToJSON(currentPage)
+				modelValues.Map["currentPage"] = &pageString
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				// A modal page cannot hold more inputs than Discord allows
+				fields, _ := JSONToFieldInfoSlice(*formValues.Map["pageFields"])
+				if len(fields) >= MaxModalFields {
+					return idxEditBranchStart
+				}
+				return idxEditPageFieldStart
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditBranchStart
+		values := map[string]*string{
+			"branchStartConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Branch Start",
+			Form: addBranchStartFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editBranchStartValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				allForms[idxEditBranchInfo].Values.Map["branchField"] = new(string)
+				allForms[idxEditBranchInfo].Values.Map["branchEquals"] = new(string)
+				allForms[idxEditBranchInfo].Values.Map["branchGoto"] = new(string)
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["branchStartConfirm"] == "yes" {
+					// Branch rules test a field on this page, so an empty page has nothing to branch on
+					fields, _ := JSONToFieldInfoSlice(*allForms[idxEditPageFieldInfo].Values.Map["pageFields"])
+					if len(fields) == 0 {
+						return idxEditPageNext
+					}
+					return -1
+				}
+				return idxEditPageNext
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditBranchInfo
+		values := map[string]*string{
+			"branchField":  new(string),
+			"branchEquals": new(string),
+			"branchGoto":   new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Branch Info",
+			Form: addBranchInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editBranchInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentPage, _ := jsonToPage(*modelValues.Map["currentPage"])
+
+				currentPage.Branches = append(currentPage.Branches, BranchRule{
+					Field:  *formValues.Map["branchField"],
+					Equals: *formValues.Map["branchEquals"],
+					Goto:   *formValues.Map["branchGoto"],
+				})
+				pageString, _ := pageToJSON(currentPage)
+				modelValues.Map["currentPage"] = &pageString
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				return idxEditBranchStart
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditPageNext
+		values := map[string]*string{
+			"pages":              new(string),
+			"pageNext":           new(string),
+			"pageAnotherConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Page Next",
+			Form: addPageNextFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editPageNextValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentPage, _ := jsonToPage(*modelValues.Map["currentPage"])
+				currentPage.Next = *formValues.Map["pageNext"]
+
+				pages, _ := JSONToPageInfoSlice(*modelValues.Map["pages"])
+				pages = append(pages, currentPage)
+				pagesString, _ := PageInfoSliceToJSON(pages)
+				modelValues.Map["pages"] = &pagesString
+				// The branch callback cannot see the model values, so the pages ride on the form too
+				mirror := pagesString
+				formValues.Map["pages"] = &mirror
+
+				// The accepted pages live on the command so the accept summary and save path see them
+				currentCommand, _ := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+				currentCommand.Pages = pages
+				commandString, _ := currentCommand.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+
+				// The next page starts with clean page forms
+				allForms[idxEditPageInfo].Values.Map["pageName"] = new(string)
+				allForms[idxEditPageInfo].Values.Map["pageTitle"] = new(string)
+				formValues.Map["pageNext"] = new(string)
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				pages, _ := JSONToPageInfoSlice(*formValues.Map["pages"])
+				// The flow cannot chain more pages than the cap allows
+				if *formValues.Map["pageAnotherConfirm"] == "yes" && len(pages) < MaxFlowPages {
+					return idxEditPageInfo
+				}
+				return idxEditRedefineResponses
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditModInfo
+		values := map[string]*string{
+			"cmdName":        new(string),
+			"cmdType":        new(string),
+			"cmdScope":       new(string),
+			"cmdDescription": new(string),
+			"cmdReturnType":  new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Command Info",
+			Form: addCmdInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editCommandInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "command",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentCommand, err := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+				if err != nil {
+					return
+				}
+				// Only the info fields change here, the collected sets stay until redefined
+				currentCommand.Name = *formValues.Map["cmdName"]
+				currentCommand.Type = *formValues.Map["cmdType"]
+				currentCommand.Scope = *formValues.Map["cmdScope"]
+				currentCommand.Description = *formValues.Map["cmdDescription"]
+				// Modal commands only respond through the modal, so their return type is fixed
+				returnType := *formValues.Map["cmdReturnType"]
+				if currentCommand.Type == "modal" {
+					returnType = "None"
+				}
+				currentCommand.ReturnType = returnType
+				commandString, _ := currentCommand.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				return idxEditRedefine
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditRedefine
+		values := map[string]*string{
+			"redefineConfirm": new(string),
+			"cmdType":         new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Redefine",
+			Form: editRedefineFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editRedefineValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "command",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentCommand, err := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+				if err != nil {
+					return
+				}
+				// The branch callback cannot see the model values, so the type rides on the form
+				commandType := currentCommand.Type
+				formValues.Map["cmdType"] = &commandType
+
+				if *formValues.Map["redefineConfirm"] != "yes" {
+					return
+				}
+				// Redefining drops the collected sets and clears every accumulator
+				currentCommand.Args = []ArgInfo{}
+				currentCommand.Fields = []FieldInfo{}
+				currentCommand.Pages = []PageInfo{}
+				commandString, _ := currentCommand.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+
+				allForms[idxEditArgInfo].Values.Map["args"] = new(string)
+				allForms[idxEditFieldInfo].Values.Map["fields"] = new(string)
+				allForms[idxEditPageInfo].Values.Map["pageName"] = new(string)
+				allForms[idxEditPageInfo].Values.Map["pageTitle"] = new(string)
+				allForms[idxEditPageFieldInfo].Values.Map["pageFields"] = new(string)
+				allForms[idxEditPageNext].Values.Map["pages"] = new(string)
+				emptyPages := "[]"
+				modelValues.Map["pages"] = &emptyPages
+				modelValues.Map["currentPage"] = new(string)
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["redefineConfirm"] == "yes" {
+					if formValues.Map["cmdType"] != nil && *formValues.Map["cmdType"] == "modal" {
+						return idxEditMultiPage
+					}
+					return idxEditArgStart
+				}
+				return idxEditRedefineResponses
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditRedefineResponses
+		values := map[string]*string{
+			"redefineResponsesConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Redefine Responses",
+			Form: editRedefineResponsesFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editRedefineResponsesValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "response",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				if *formValues.Map["redefineResponsesConfirm"] != "yes" {
+					return
+				}
+				currentCommand, err := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+				if err != nil {
+					return
+				}
+				currentCommand.Responses = []ResponseInfo{}
+				commandString, _ := currentCommand.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+				allForms[idxEditResponseInfo].Values.Map["responses"] = new(string)
+			},
+			// Only an edited command with kept responses has anything to redefine
+			SkipCondition: func(modelValues Values, allForms []FormWrapper, currentIndex int) bool {
+				if modelValues.Map["editingOriginal"] == nil || *modelValues.Map["editingOriginal"] == "" {
+					return true
+				}
+				if modelValues.Map["currentCommand"] == nil || *modelValues.Map["currentCommand"] == "" {
+					return true
+				}
+				currentCommand, err := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+				if err != nil {
+					return true
+				}
+				return len(currentCommand.Responses) == 0
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["redefineResponsesConfirm"] == "yes" {
+					return -1
+				}
+				return idxEditAccept
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditResponseStart
+		values := map[string]*string{
+			"responseStartConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Response Start",
+			Form: addResponseStartFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editResponseStartValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "response",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				allForms[idxEditResponseInfo].Values.Map["responseContent"] = new(string)
+				allForms[idxEditResponseInfo].Values.Map["responseEphemeral"] = new(string)
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["responseStartConfirm"] == "yes" {
+					return -1
+				}
+				return idxEditAccept
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditResponseInfo
+		values := map[string]*string{
+			"responses":         new(string),
+			"responseContent":   new(string),
+			"responseEphemeral": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Response Info",
+			Form: addResponseInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editResponseInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "response",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentCommand, _ := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+
+				// Plain messages are the only response type that exists today
+				currentCommand.Responses = append(currentCommand.Responses, ResponseInfo{
+					Type:      "message",
+					Content:   *formValues.Map["responseContent"],
+					Ephemeral: *formValues.Map["responseEphemeral"] == "yes",
+				})
+				responseString, _ := ResponseInfoSliceToJSON(currentCommand.Responses)
+				formValues.Map["responses"] = &responseString
+				commandString, _ := currentCommand.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				// A command cannot declare more responses than the cap allows
+				responses, _ := JSONToResponseInfoSlice(*formValues.Map["responses"])
+				if len(responses) >= MaxCommandResponses {
+					return idxEditAccept
+				}
+				return idxEditResponseStart
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditPickCommand
+		values := map[string]*string{
+			"editCmdName": new(string),
+			"editFound":   new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Pick Command",
+			Form: editPickCommandFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editPickCommandValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "command",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				found := "no"
+				formValues.Map["editFound"] = &found
+
+				name := ""
+				if formValues.Map["editCmdName"] != nil {
+					name = *formValues.Map["editCmdName"]
+				}
+				if name == "" {
+					return
+				}
+
+				slashCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["slashCommands"])
+				prefixCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["prefixCommands"])
+
+				// The picked command leaves its list so name checks run against the rest
+				var command *CommandInfo
+				for i, candidate := range slashCommandList {
+					if candidate.Name == name {
+						picked := candidate
+						command = &picked
+						slashCommandList = append(slashCommandList[:i], slashCommandList[i+1:]...)
+						break
+					}
+				}
+				if command == nil {
+					for i, candidate := range prefixCommandList {
+						if candidate.Name == name {
+							picked := candidate
+							command = &picked
+							prefixCommandList = append(prefixCommandList[:i], prefixCommandList[i+1:]...)
+							break
+						}
+					}
+				}
+				if command == nil {
+					return
+				}
+
+				slashJSON, _ := CmdInfoSliceToJSON(slashCommandList)
+				modelValues.Map["slashCommands"] = &slashJSON
+				prefixJSON, _ := CmdInfoSliceToJSON(prefixCommandList)
+				modelValues.Map["prefixCommands"] = &prefixJSON
+
+				commandString, _ := command.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+				originalString := commandString
+				modelValues.Map["editingOriginal"] = &originalString
+
+				// The info form starts prefilled with the picked command's values
+				cmdName := command.Name
+				cmdType := command.Type
+				cmdScope := command.Scope
+				cmdDescription := command.Description
+				cmdReturnType := command.ReturnType
+				allForms[idxEditModInfo].Values.Map["cmdName"] = &cmdName
+				allForms[idxEditModInfo].Values.Map["cmdType"] = &cmdType
+				allForms[idxEditModInfo].Values.Map["cmdScope"] = &cmdScope
+				allForms[idxEditModInfo].Values.Map["cmdDescription"] = &cmdDescription
+				allForms[idxEditModInfo].Values.Map["cmdReturnType"] = &cmdReturnType
+
+				yes := "yes"
+				formValues.Map["editFound"] = &yes
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if formValues.Map["editFound"] != nil && *formValues.Map["editFound"] == "yes" {
+					return idxEditModInfo
+				}
+				return idxEditAction
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxEditRemoveCommand
+		values := map[string]*string{
+			"removeCmdName": new(string),
+			"removeConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Edit Remove Command",
+			Form: editRemoveCommandFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "editRemoveCommandValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "command",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				if *formValues.Map["removeConfirm"] != "yes" {
+					return
+				}
+				name := ""
+				if formValues.Map["removeCmdName"] != nil {
+					name = *formValues.Map["removeCmdName"]
+				}
+				if name == "" {
+					return
+				}
+
+				slashCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["slashCommands"])
+				for i, candidate := range slashCommandList {
+					if candidate.Name == name {
+						slashCommandList = append(slashCommandList[:i], slashCommandList[i+1:]...)
+						slashJSON, _ := CmdInfoSliceToJSON(slashCommandList)
+						modelValues.Map["slashCommands"] = &slashJSON
+						return
+					}
+				}
+				prefixCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["prefixCommands"])
+				for i, candidate := range prefixCommandList {
+					if candidate.Name == name {
+						prefixCommandList = append(prefixCommandList[:i], prefixCommandList[i+1:]...)
+						prefixJSON, _ := CmdInfoSliceToJSON(prefixCommandList)
+						modelValues.Map["prefixCommands"] = &prefixJSON
+						return
+					}
+				}
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				return idxEditAction
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+
+	return forms
+}
+
+// editLoadCogCommands fills the model value bus with the selected cog's command lists
+func editLoadCogCommands(modelValues Values) {
+	config, err := LoadConfig()
+	if err != nil {
+		return
+	}
+	for _, cog := range config.Cogs {
+		if cog.Name != *modelValues.Map["cogName"] {
+			continue
+		}
+		slashCommands := cog.SlashCommands
+		if slashCommands == nil {
+			slashCommands = []CommandInfo{}
+		}
+		prefixCommands := cog.PrefixCommands
+		if prefixCommands == nil {
+			prefixCommands = []CommandInfo{}
+		}
+		slashJSON, _ := CmdInfoSliceToJSON(slashCommands)
+		modelValues.Map["slashCommands"] = &slashJSON
+		prefixJSON, _ := CmdInfoSliceToJSON(prefixCommands)
+		modelValues.Map["prefixCommands"] = &prefixJSON
+		return
+	}
+}
+
+// editCommandNames lists every command name on the model value bus, slash commands first
+func editCommandNames(modelValues Values) []string {
+	var names []string
+	if modelValues.Map["slashCommands"] != nil {
+		slashCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["slashCommands"])
+		for _, command := range slashCommandList {
+			names = append(names, command.Name)
+		}
+	}
+	if modelValues.Map["prefixCommands"] != nil {
+		prefixCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["prefixCommands"])
+		for _, command := range prefixCommandList {
+			names = append(names, command.Name)
+		}
+	}
+	return names
+}
+
+// noCommandsFormGenerator builds the note shown when a cog has no commands to pick from
+func noCommandsFormGenerator() *huh.Form {
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("No Commands").
+				Description("This cog has no commands yet. Add a command first."),
+		),
+	)
+}
+
+func editSelectCogFormGenerator(values Values, modelValues Values) *huh.Form {
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Println("Error loading config:", err)
+		errorForm := huh.NewForm(
+			huh.NewGroup(
+				huh.NewNote().
+					Title("Error").
+					Description("Failed to load configuration file."),
+			),
+		)
+		errorForm.State = huh.StateCompleted
+		return errorForm
+	}
+
+	var cogList []string
+	for _, cog := range config.Cogs {
+		cogList = append(cogList, cog.Name)
+	}
+
+	if len(cogList) == 0 {
+		noCogForm := huh.NewForm(
+			huh.NewGroup(
+				huh.NewNote().
+					Title("No Cogs Available").
+					Description("There are no cogs to edit. Please add some cogs first."),
+			),
+		)
+		return noCogForm
+	}
+
+	cogSelectForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Value(values.Map["cogName"]).
+				Height(8).
+				Title("Select a cog to edit").
+				Options(huh.NewOptions(cogList...)...),
+		),
+	)
+	return cogSelectForm
+}
+
+func editActionFormGenerator(values Values, modelValues Values) *huh.Form {
+	actionForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Value(values.Map["editAction"]).
+				Title("What do you want to do?").
+				Options(
+					huh.NewOption("Add a command", "add"),
+					huh.NewOption("Edit a command", "edit"),
+					huh.NewOption("Remove a command", "remove"),
+					huh.NewOption("Apply changes", "apply"),
+				),
+		),
+	)
+	return actionForm
+}
+
+func editPickCommandFormGenerator(values Values, modelValues Values) *huh.Form {
+	names := editCommandNames(modelValues)
+	if len(names) == 0 {
+		return noCommandsFormGenerator()
+	}
+
+	pickForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Value(values.Map["editCmdName"]).
+				Height(8).
+				Title("Select a command to edit").
+				Options(huh.NewOptions(names...)...),
+		),
+	)
+	return pickForm
+}
+
+func editRemoveCommandFormGenerator(values Values, modelValues Values) *huh.Form {
+	names := editCommandNames(modelValues)
+	if len(names) == 0 {
+		return noCommandsFormGenerator()
+	}
+
+	removeForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Value(values.Map["removeCmdName"]).
+				Height(8).
+				Title("Select a command to remove").
+				Options(huh.NewOptions(names...)...),
+			huh.NewConfirm().
+				Title("Remove this command?").
+				Affirmative("yes").
+				Negative("no").
+				Validate(func(b bool) error {
+					var s string
+					if b {
+						s = "yes"
+					} else {
+						s = "no"
+					}
+					values.Map["removeConfirm"] = &s
+					return nil
+				}),
+		),
+	)
+	return removeForm
+}
+
+func editRedefineFormGenerator(values Values, modelValues Values) *huh.Form {
+	redefineForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Redefine the arguments, fields, and pages?").
+				Affirmative("yes").
+				Negative("no").
+				Validate(func(b bool) error {
+					var s string
+					if b {
+						s = "yes"
+					} else {
+						s = "no"
+					}
+					values.Map["redefineConfirm"] = &s
+					return nil
+				}),
+		),
+	)
+	return redefineForm
+}
+
+func editRedefineResponsesFormGenerator(values Values, modelValues Values) *huh.Form {
+	redefineResponsesForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Redefine the responses?").
+				Affirmative("yes").
+				Negative("no").
+				Validate(func(b bool) error {
+					var s string
+					if b {
+						s = "yes"
+					} else {
+						s = "no"
+					}
+					values.Map["redefineResponsesConfirm"] = &s
+					return nil
+				}),
+		),
+	)
+	return redefineResponsesForm
+}
+
+/**
  * Configuration Forms and Model Generators
  */
 func ConfigFormWrapperGenerator() []FormWrapper {

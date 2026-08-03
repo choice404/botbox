@@ -53,6 +53,7 @@ Built with **Go**, [`Cobra`](https://github.com/spf13/cobra), [`Bubble Tea`](htt
 -   **Dynamic Help Command**: Generated bots include a permission aware, paginated /help that reads the live bot state, so it stays accurate after cogs are loaded, unloaded, or reloaded without a restart. Output format is controlled by bot.help_style (compact or detailed).
 -   **Admin Tools**: Generated bots ship with /sync, /status, /uptime, and /set-prefix, all locked behind administrator permissions and an OWNER_IDS owner check.
 -   **Docker Support**: Turn any Bot Box project into a container with `botbox docker init`, generating a Dockerfile, docker-compose.yml, and .dockerignore matched to your env or Doppler setup.
+-   **Cog Editing**: Modify existing cogs with `botbox edit`, add, edit, or remove commands interactively or from flags, with automatic file regeneration and backups.
 -   **Slash Command Support**: Seamless integration via `discord.ext.commands`.
 -   **Automated Cog Generation**: Generate new cogs with predefined commands and arguments effortlessly.
 -   **Project Initialization**: Quick setup with `.env` and `botbox.conf` files.
@@ -146,6 +147,30 @@ botbox remove
 ```
 
 You'll be prompted to select a cog to remove. This command will also update `botbox.conf` accordingly.
+
+#### Edit an existing cog
+
+```sh
+botbox edit
+```
+
+Select a cog and then add, edit, or remove its commands through the same forms the add command uses, with existing values prefilled. Applying changes regenerates the cog file from its definition and updates botbox.conf. A .py.bak backup of the previous file is written first, since regeneration does not preserve custom code written inside command bodies.
+
+Headless editing works through flags, which can be combined and apply as replace, then remove, then add:
+
+```sh
+# Remove a command
+botbox edit MyCog --remove-command greet
+
+# Add commands from JSON, same format as botbox add --commands
+botbox edit MyCog --add-commands @commands.json
+
+# Replace every command in the cog
+botbox edit MyCog --replace-commands @commands.json
+
+# Change the cog environment and skip the backup file
+botbox edit MyCog --env production --no-backup
+```
 
 #### Upgrade project configuration
 
@@ -525,6 +550,7 @@ This will:
 
 ## 📜 Version History
 
+-   **2.11.0** Added the botbox edit command for modifying existing cogs, interactively with prefilled forms or through flags, with automatic cog file regeneration and .py.bak backups. Fixed prefix command argument descriptions being lost during config sync and prefix command scope drifting between guild and global
 -   **2.10.0** Added multipage modal flows. Modal commands can now chain up to ten pages with branch rules that route users based on submitted values, with per user session state and Continue button bridges between pages. Added custom response messages for all command types with {field} placeholder substitution in flow responses. Both available in the TUI and headless mode with full config sync round trip through an embedded flow definition
 -   **2.9.0** Added Docker support. botbox docker init generates a Dockerfile, docker-compose.yml, and .dockerignore for any project, new projects can opt in at creation with the --docker flag or the new prompt, and the files adapt to .env or Doppler projects through the new bot.env_provider config key
 -   **2.8.0** Generated bots now include a dynamic /help command that filters by user permissions, paginates with buttons, reflects cog reloads without a restart, and formats output based on the new bot.help_style config key. Added an admin cog with /sync, /status, /uptime, and /set-prefix behind administrator permissions and an OWNER_IDS owner check. Fixed guild scoped commands being synced globally and cog reloads never re-registering commands
