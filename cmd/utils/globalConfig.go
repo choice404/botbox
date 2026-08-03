@@ -477,12 +477,111 @@ func parseSlashCommand(lines []string, startIndex int) *CommandInfo {
 	if modalClass, found := findSendModal(lines, funcIndex); found {
 		cmd.Type = "modal"
 		cmd.Args = nil
-		if modalClass != "" {
+		// A FLOW blob is the single source for a multi page command, only single page modals fall back to the class
+		if flow, ok := parseCommandFlow(lines, cmd.Name); ok {
+			cmd.Pages = flow.Pages
+			cmd.Responses = flow.Responses
+		} else if modalClass != "" {
 			cmd.Fields = parseModalFields(lines, modalClass)
 		}
+	} else {
+		parseCommandResponse(lines, funcIndex, cmd, slashResponseRegex)
 	}
 
 	return cmd
+}
+
+// parseCommandFlow reads the FLOW JSON blob generated next to a multi page modal command
+func parseCommandFlow(lines []string, commandName string) (*commandFlow, bool) {
+	marker := CommandConstName(commandName) + "_FLOW = json.loads(r'''"
+
+	// Find the line that opens the raw triple quoted JSON string
+	start := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) == marker {
+			start = i + 1
+			break
+		}
+	}
+	if start == -1 {
+		return nil, false
+	}
+
+	// Collect every line until the closing quotes so the whole blob can be unmarshaled at once
+	var jsonLines []string
+	end := -1
+	for j := start; j < len(lines); j++ {
+		if strings.TrimSpace(lines[j]) == "''')" {
+			end = j
+			break
+		}
+		jsonLines = append(jsonLines, lines[j])
+	}
+	if end == -1 {
+		return nil, false
+	}
+
+	var flow commandFlow
+	if err := json.Unmarshal([]byte(strings.Join(jsonLines, "\n")), &flow); err != nil {
+		return nil, false
+	}
+
+	return &flow, true
+}
+
+// Reply call shapes the generator writes into slash and prefix command bodies
+var (
+	slashResponseRegex  = regexp.MustCompile(`await interaction\.response\.send_message\(f?"((?:[^"\\]|\\.)*)"\s*,\s*ephemeral\s*=\s*(True|False)\s*\)`)
+	prefixResponseRegex = regexp.MustCompile(`await ctx\.send\(f?"((?:[^"\\]|\\.)*)"\s*,\s*ephemeral\s*=\s*(True|False)\s*\)`)
+)
+
+// parseCommandResponse reads the generated reply call in a command body into the expected responses
+// Only the generated shape counts, the first statement after the docstring must be a try block whose first line is the reply
+func parseCommandResponse(lines []string, funcIndex int, cmd *CommandInfo, replyRegex *regexp.Regexp) {
+	inDocstring := false
+	sawTry := false
+
+	for j := funcIndex + 1; j < len(lines) && j < funcIndex+maxCommandBodyLines; j++ {
+		line := strings.TrimSpace(lines[j])
+
+		// Track the docstring so its text is never mistaken for code
+		if strings.HasPrefix(line, `"""`) {
+			if !inDocstring {
+				inDocstring = strings.Count(line, `"""`) == 1
+			} else {
+				inDocstring = false
+			}
+			continue
+		}
+		if inDocstring || line == "" {
+			continue
+		}
+
+		// The first real statement has to open the try block or the body is not the generated shape
+		if !sawTry {
+			if line == "try:" {
+				sawTry = true
+				continue
+			}
+			return
+		}
+
+		matches := replyRegex.FindStringSubmatch(line)
+		if matches == nil {
+			return
+		}
+
+		content := matches[1]
+		ephemeral := matches[2] == "True"
+
+		// The default generated reply echoes the command name, that exact shape means no expected responses
+		if content == cmd.Name && ephemeral {
+			return
+		}
+
+		cmd.Responses = []ResponseInfo{{Type: "message", Content: content, Ephemeral: ephemeral}}
+		return
+	}
 }
 
 // Line budget for scanning a command body for a send_modal call
@@ -635,6 +734,8 @@ func parsePrefixCommand(lines []string, startIndex int) *CommandInfo {
 	}
 
 	parseCommandDocstring(lines, funcIndex, cmd)
+
+	parseCommandResponse(lines, funcIndex, cmd, prefixResponseRegex)
 
 	return cmd
 }
@@ -831,6 +932,55 @@ func commandEqual(a, b CommandInfo) bool {
 
 	for i, fieldA := range a.Fields {
 		if fieldA != b.Fields[i] {
+			return false
+		}
+	}
+
+	if len(a.Pages) != len(b.Pages) {
+		return false
+	}
+
+	for i := range a.Pages {
+		if !pageEqual(a.Pages[i], b.Pages[i]) {
+			return false
+		}
+	}
+
+	if len(a.Responses) != len(b.Responses) {
+		return false
+	}
+
+	for i, responseA := range a.Responses {
+		if responseA != b.Responses[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+// pageEqual compares two flow pages including their fields and branch rules
+func pageEqual(a, b PageInfo) bool {
+	if a.Name != b.Name || a.Title != b.Title || a.Next != b.Next {
+		return false
+	}
+
+	if len(a.Fields) != len(b.Fields) {
+		return false
+	}
+
+	for i, fieldA := range a.Fields {
+		if fieldA != b.Fields[i] {
+			return false
+		}
+	}
+
+	if len(a.Branches) != len(b.Branches) {
+		return false
+	}
+
+	for i, branchA := range a.Branches {
+		if branchA != b.Branches[i] {
 			return false
 		}
 	}

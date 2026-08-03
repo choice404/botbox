@@ -6,6 +6,7 @@ See end of file for extended copyright information
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -202,6 +203,15 @@ func AddFormWrapperGenerator() []FormWrapper {
 		idxFieldStart
 		idxFieldInfo
 		idxAccept
+		idxMultiPage
+		idxPageInfo
+		idxPageFieldStart
+		idxPageFieldInfo
+		idxBranchStart
+		idxBranchInfo
+		idxPageNext
+		idxResponseStart
+		idxResponseInfo
 	)
 
 	forms := []FormWrapper{}
@@ -263,6 +273,15 @@ func AddFormWrapperGenerator() []FormWrapper {
 				allForms[idxCmdInfo].Values.Map["cmdReturnType"] = new(string)
 				allForms[idxArgInfo].Values.Map["args"] = new(string)
 				allForms[idxFieldInfo].Values.Map["fields"] = new(string)
+				// Every new command starts with clean page and response state
+				allForms[idxPageInfo].Values.Map["pageName"] = new(string)
+				allForms[idxPageInfo].Values.Map["pageTitle"] = new(string)
+				allForms[idxPageFieldInfo].Values.Map["pageFields"] = new(string)
+				allForms[idxPageNext].Values.Map["pages"] = new(string)
+				allForms[idxResponseInfo].Values.Map["responses"] = new(string)
+				emptyPages := "[]"
+				modelValues.Map["pages"] = &emptyPages
+				modelValues.Map["currentPage"] = new(string)
 			},
 			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
 				if *formValues.Map["cmdStartConfirm"] == "yes" {
@@ -304,15 +323,17 @@ func AddFormWrapperGenerator() []FormWrapper {
 					Description: *formValues.Map["cmdDescription"],
 					Args:        []ArgInfo{},
 					Fields:      []FieldInfo{},
+					Pages:       []PageInfo{},
+					Responses:   []ResponseInfo{},
 					ReturnType:  returnType,
 				}
 				commandString, _ := command.ToJSON()
 				modelValues.Map["currentCommand"] = &commandString
 			},
 			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
-				// Modal commands collect fields instead of arguments
+				// Modal commands first decide between a single page and a multi page flow
 				if *formValues.Map["cmdType"] == "modal" {
-					return idxFieldStart
+					return idxMultiPage
 				}
 				return -1
 			},
@@ -341,7 +362,7 @@ func AddFormWrapperGenerator() []FormWrapper {
 				if *formValues.Map["argStartConfirm"] == "yes" {
 					return -1
 				}
-				return idxAccept
+				return idxResponseStart
 			},
 		}
 		forms = append(forms, wrapper)
@@ -413,7 +434,7 @@ func AddFormWrapperGenerator() []FormWrapper {
 				if *formValues.Map["fieldStartConfirm"] == "yes" {
 					return -1
 				}
-				return idxAccept
+				return idxResponseStart
 			},
 		}
 		forms = append(forms, wrapper)
@@ -455,7 +476,7 @@ func AddFormWrapperGenerator() []FormWrapper {
 				// A modal page cannot hold more inputs than Discord allows
 				fields, _ := JSONToFieldInfoSlice(*formValues.Map["fields"])
 				if len(fields) >= MaxModalFields {
-					return idxAccept
+					return idxResponseStart
 				}
 				return idxFieldStart
 			},
@@ -510,6 +531,317 @@ func AddFormWrapperGenerator() []FormWrapper {
 				if targetFormIndex == idxCmdInfo {
 					ResetFormValues(targetValues)
 				}
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxMultiPage
+		values := map[string]*string{
+			"multiPageConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Add Multi Page",
+			Form: addMultiPageFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addMultiPageValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				// A fresh modal command always starts with an empty page collection
+				emptyPages := "[]"
+				modelValues.Map["pages"] = &emptyPages
+				mirror := "[]"
+				allForms[idxPageNext].Values.Map["pages"] = &mirror
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["multiPageConfirm"] == "yes" {
+					return idxPageInfo
+				}
+				// A single page modal keeps the existing field loop
+				return idxFieldStart
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxPageInfo
+		values := map[string]*string{
+			"pageName":  new(string),
+			"pageTitle": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Add Page Info",
+			Form: addPageInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addPageInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				page := PageInfo{
+					Name:     *formValues.Map["pageName"],
+					Title:    *formValues.Map["pageTitle"],
+					Fields:   []FieldInfo{},
+					Branches: []BranchRule{},
+				}
+				pageString, _ := pageToJSON(page)
+				modelValues.Map["currentPage"] = &pageString
+				// Each page collects its own fields, so the accumulator starts empty
+				allForms[idxPageFieldInfo].Values.Map["pageFields"] = new(string)
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxPageFieldStart
+		values := map[string]*string{
+			"pageFieldStartConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Add Page Field Start",
+			Form: addPageFieldStartFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addPageFieldStartValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				allForms[idxPageFieldInfo].Values.Map["fieldName"] = new(string)
+				allForms[idxPageFieldInfo].Values.Map["fieldLabel"] = new(string)
+				allForms[idxPageFieldInfo].Values.Map["fieldStyle"] = new(string)
+				allForms[idxPageFieldInfo].Values.Map["fieldRequired"] = new(string)
+				allForms[idxPageFieldInfo].Values.Map["fieldPlaceholder"] = new(string)
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["pageFieldStartConfirm"] == "yes" {
+					return -1
+				}
+				return idxBranchStart
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxPageFieldInfo
+		values := map[string]*string{
+			"pageFields":       new(string),
+			"fieldName":        new(string),
+			"fieldLabel":       new(string),
+			"fieldStyle":       new(string),
+			"fieldRequired":    new(string),
+			"fieldPlaceholder": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Add Page Field Info",
+			Form: addPageFieldInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addPageFieldInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentPage, _ := jsonToPage(*modelValues.Map["currentPage"])
+
+				currentPage.Fields = append(currentPage.Fields, FieldInfo{
+					Name:        *formValues.Map["fieldName"],
+					Label:       *formValues.Map["fieldLabel"],
+					Style:       *formValues.Map["fieldStyle"],
+					Required:    *formValues.Map["fieldRequired"] == "yes",
+					Placeholder: *formValues.Map["fieldPlaceholder"],
+				})
+				fieldString, _ := FieldInfoSliceToJSON(currentPage.Fields)
+				formValues.Map["pageFields"] = &fieldString
+				pageString, _ := pageToJSON(currentPage)
+				modelValues.Map["currentPage"] = &pageString
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				// A modal page cannot hold more inputs than Discord allows
+				fields, _ := JSONToFieldInfoSlice(*formValues.Map["pageFields"])
+				if len(fields) >= MaxModalFields {
+					return idxBranchStart
+				}
+				return idxPageFieldStart
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxBranchStart
+		values := map[string]*string{
+			"branchStartConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Add Branch Start",
+			Form: addBranchStartFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addBranchStartValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				allForms[idxBranchInfo].Values.Map["branchField"] = new(string)
+				allForms[idxBranchInfo].Values.Map["branchEquals"] = new(string)
+				allForms[idxBranchInfo].Values.Map["branchGoto"] = new(string)
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["branchStartConfirm"] == "yes" {
+					// Branch rules test a field on this page, so an empty page has nothing to branch on
+					fields, _ := JSONToFieldInfoSlice(*allForms[idxPageFieldInfo].Values.Map["pageFields"])
+					if len(fields) == 0 {
+						return idxPageNext
+					}
+					return -1
+				}
+				return idxPageNext
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxBranchInfo
+		values := map[string]*string{
+			"branchField":  new(string),
+			"branchEquals": new(string),
+			"branchGoto":   new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Add Branch Info",
+			Form: addBranchInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addBranchInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentPage, _ := jsonToPage(*modelValues.Map["currentPage"])
+
+				currentPage.Branches = append(currentPage.Branches, BranchRule{
+					Field:  *formValues.Map["branchField"],
+					Equals: *formValues.Map["branchEquals"],
+					Goto:   *formValues.Map["branchGoto"],
+				})
+				pageString, _ := pageToJSON(currentPage)
+				modelValues.Map["currentPage"] = &pageString
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				return idxBranchStart
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxPageNext
+		values := map[string]*string{
+			"pages":              new(string),
+			"pageNext":           new(string),
+			"pageAnotherConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Add Page Next",
+			Form: addPageNextFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addPageNextValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "page",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentPage, _ := jsonToPage(*modelValues.Map["currentPage"])
+				currentPage.Next = *formValues.Map["pageNext"]
+
+				pages, _ := JSONToPageInfoSlice(*modelValues.Map["pages"])
+				pages = append(pages, currentPage)
+				pagesString, _ := PageInfoSliceToJSON(pages)
+				modelValues.Map["pages"] = &pagesString
+				// The branch callback cannot see the model values, so the pages ride on the form too
+				mirror := pagesString
+				formValues.Map["pages"] = &mirror
+
+				// The accepted pages live on the command so the accept summary and save path see them
+				currentCommand, _ := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+				currentCommand.Pages = pages
+				commandString, _ := currentCommand.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+
+				// The next page starts with clean page forms
+				allForms[idxPageInfo].Values.Map["pageName"] = new(string)
+				allForms[idxPageInfo].Values.Map["pageTitle"] = new(string)
+				formValues.Map["pageNext"] = new(string)
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				pages, _ := JSONToPageInfoSlice(*formValues.Map["pages"])
+				// The flow cannot chain more pages than the cap allows
+				if *formValues.Map["pageAnotherConfirm"] == "yes" && len(pages) < MaxFlowPages {
+					return idxPageInfo
+				}
+				return idxResponseStart
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxResponseStart
+		values := map[string]*string{
+			"responseStartConfirm": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Add Response Start",
+			Form: addResponseStartFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addResponseStartValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "response",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				allForms[idxResponseInfo].Values.Map["responseContent"] = new(string)
+				allForms[idxResponseInfo].Values.Map["responseEphemeral"] = new(string)
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				if *formValues.Map["responseStartConfirm"] == "yes" {
+					return -1
+				}
+				return idxAccept
+			},
+		}
+		forms = append(forms, wrapper)
+	}
+	{ // NOTE: idxResponseInfo
+		values := map[string]*string{
+			"responses":         new(string),
+			"responseContent":   new(string),
+			"responseEphemeral": new(string),
+		}
+		wrapper := FormWrapper{
+			Name: "Add Response Info",
+			Form: addResponseInfoFormGenerator,
+			Values: Values{
+				Map:  values,
+				Name: "addResponseInfoValues",
+			},
+			ShowStatus: false,
+			FormGroup:  "response",
+			Callback: func(formValues Values, modelValues Values, allForms []FormWrapper) {
+				currentCommand, _ := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+
+				// Plain messages are the only response type that exists today
+				currentCommand.Responses = append(currentCommand.Responses, ResponseInfo{
+					Type:      "message",
+					Content:   *formValues.Map["responseContent"],
+					Ephemeral: *formValues.Map["responseEphemeral"] == "yes",
+				})
+				responseString, _ := ResponseInfoSliceToJSON(currentCommand.Responses)
+				formValues.Map["responses"] = &responseString
+				commandString, _ := currentCommand.ToJSON()
+				modelValues.Map["currentCommand"] = &commandString
+			},
+			BranchCallback: func(formValues Values, allForms []FormWrapper) int {
+				// A command cannot declare more responses than the cap allows
+				responses, _ := JSONToResponseInfoSlice(*formValues.Map["responses"])
+				if len(responses) >= MaxCommandResponses {
+					return idxAccept
+				}
+				return idxResponseStart
 			},
 		}
 		forms = append(forms, wrapper)
@@ -609,44 +941,68 @@ func addCmdInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 	return cmdInfoForm
 }
 
-func addCmdAcceptFormGenerator(values Values, modelValues Values) *huh.Form {
-	var commandName, commandType, commandDesc, commandReturn, commandArgs, commandFields string
-
-	if modelValues.Map["currentCommand"] != nil && *modelValues.Map["currentCommand"] != "" {
-		currentCommand, err := JSONToCmdInfo(*modelValues.Map["currentCommand"])
-		if err == nil {
-			commandName = currentCommand.Name
-			commandType = currentCommand.Type
-			commandDesc = currentCommand.Description
-			commandReturn = currentCommand.ReturnType
-
-			if len(currentCommand.Args) > 0 {
-				argNames := make([]string, len(currentCommand.Args))
-				for i, arg := range currentCommand.Args {
-					argNames[i] = fmt.Sprintf("%s (%s)", arg.Name, arg.Type)
-				}
-				commandArgs = strings.Join(argNames, ", ")
-			} else {
-				commandArgs = "None"
-			}
-
-			if len(currentCommand.Fields) > 0 {
-				fieldNames := make([]string, len(currentCommand.Fields))
-				for i, field := range currentCommand.Fields {
-					fieldNames[i] = fmt.Sprintf("%s (%s)", field.Name, field.Style)
-				}
-				commandFields = strings.Join(fieldNames, ", ")
-			} else {
-				commandFields = "None"
-			}
+// buildCommandSummary renders the accept screen text for a fully collected command
+func buildCommandSummary(command CommandInfo) string {
+	commandArgs := "None"
+	if len(command.Args) > 0 {
+		argNames := make([]string, len(command.Args))
+		for i, arg := range command.Args {
+			argNames[i] = fmt.Sprintf("%s (%s)", arg.Name, arg.Type)
 		}
+		commandArgs = strings.Join(argNames, ", ")
+	}
+
+	commandFields := "None"
+	if len(command.Fields) > 0 {
+		fieldNames := make([]string, len(command.Fields))
+		for i, field := range command.Fields {
+			fieldNames[i] = fmt.Sprintf("%s (%s)", field.Name, field.Style)
+		}
+		commandFields = strings.Join(fieldNames, ", ")
 	}
 
 	summary := fmt.Sprintf("Command Name: %s\nCommand Type: %s\nDescription: %s\nReturn Type: %s\nArguments: %v",
-		commandName, commandType, commandDesc, commandReturn, commandArgs)
-	if commandType == "modal" {
+		command.Name, command.Type, command.Description, command.ReturnType, commandArgs)
+	if command.Type == "modal" {
 		summary = fmt.Sprintf("Command Name: %s\nCommand Type: %s\nDescription: %s\nReturn Type: %s\nFields: %v",
-			commandName, commandType, commandDesc, commandReturn, commandFields)
+			command.Name, command.Type, command.Description, command.ReturnType, commandFields)
+		// A multi page modal lists its pages instead of a flat field list
+		if len(command.Pages) > 0 {
+			pageLines := make([]string, len(command.Pages))
+			for i, page := range command.Pages {
+				next := page.Next
+				if next == "" {
+					next = "end"
+				}
+				pageLines[i] = fmt.Sprintf("  %s (%d fields, %d branches, next: %s)", page.Name, len(page.Fields), len(page.Branches), next)
+			}
+			summary = fmt.Sprintf("Command Name: %s\nCommand Type: %s\nDescription: %s\nReturn Type: %s\nPages:\n%s",
+				command.Name, command.Type, command.Description, command.ReturnType, strings.Join(pageLines, "\n"))
+		}
+	}
+
+	if len(command.Responses) > 0 {
+		responseLines := make([]string, len(command.Responses))
+		for i, response := range command.Responses {
+			marker := ""
+			if response.Ephemeral {
+				marker = ", ephemeral"
+			}
+			responseLines[i] = fmt.Sprintf("  %s: %s%s", response.Type, response.Content, marker)
+		}
+		summary += "\nResponses:\n" + strings.Join(responseLines, "\n")
+	}
+
+	return summary
+}
+
+func addCmdAcceptFormGenerator(values Values, modelValues Values) *huh.Form {
+	var summary string
+	if modelValues.Map["currentCommand"] != nil && *modelValues.Map["currentCommand"] != "" {
+		currentCommand, err := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+		if err == nil {
+			summary = buildCommandSummary(*currentCommand)
+		}
 	}
 
 	cmdAcceptForm := huh.NewForm(
@@ -659,6 +1015,12 @@ func addCmdAcceptFormGenerator(values Values, modelValues Values) *huh.Form {
 				Affirmative("yes").
 				Negative("no").
 				Validate(func(b bool) error {
+					// Accepting runs the full validation, a rejected command routes back like a plain no
+					if b {
+						if err := validateAcceptedCommand(modelValues); err != nil {
+							return err
+						}
+					}
 					var s string
 					if b {
 						s = "yes"
@@ -751,6 +1113,15 @@ func addFieldStartFormGenerator(values Values, modelValues Values) *huh.Form {
 }
 
 func addFieldInfoFormGenerator(values Values, modelValues Values) *huh.Form {
+	return fieldInfoFormGenerator(values, "fields")
+}
+
+func addPageFieldInfoFormGenerator(values Values, modelValues Values) *huh.Form {
+	return fieldInfoFormGenerator(values, "pageFields")
+}
+
+// fieldInfoFormGenerator builds the shared field form, fieldsKey names the accumulator on the wrapper
+func fieldInfoFormGenerator(values Values, fieldsKey string) *huh.Form {
 	fieldInfoForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
@@ -758,7 +1129,7 @@ func addFieldInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 				Title("Enter the field name").
 				Prompt("> ").
 				Validate(func(s string) error {
-					fields, _ := JSONToFieldInfoSlice(*values.Map["fields"])
+					fields, _ := JSONToFieldInfoSlice(*values.Map[fieldsKey])
 					return ValidateFieldName(s, fields)
 				}),
 			huh.NewInput().
@@ -795,6 +1166,303 @@ func addFieldInfoFormGenerator(values Values, modelValues Values) *huh.Form {
 		),
 	)
 	return fieldInfoForm
+}
+
+// pageToJSON moves a single page onto the string value bus
+func pageToJSON(page PageInfo) (string, error) {
+	jsonData, err := json.Marshal(page)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal PageInfo to JSON: %w", err)
+	}
+	return string(jsonData), nil
+}
+
+// jsonToPage reads a single page back off the string value bus
+func jsonToPage(jsonString string) (PageInfo, error) {
+	var page PageInfo
+	err := json.Unmarshal([]byte(jsonString), &page)
+	if err != nil {
+		return PageInfo{}, fmt.Errorf("failed to unmarshal JSON to PageInfo: %w", err)
+	}
+	return page, nil
+}
+
+// validatePageName checks a new page name against the pages collected so far
+func validatePageName(s string, pages []PageInfo) error {
+	if s == "" {
+		return fmt.Errorf("page name cannot be empty")
+	}
+	if strings.Contains(s, " ") {
+		return fmt.Errorf("page name cannot contain spaces")
+	}
+	for _, page := range pages {
+		if page.Name == s {
+			return fmt.Errorf("page name already exists")
+		}
+	}
+	return nil
+}
+
+// validatePageReference checks a page name typed as a branch goto or default next target
+func validatePageReference(s string) error {
+	if strings.Contains(s, " ") {
+		return fmt.Errorf("page name cannot contain spaces")
+	}
+	return nil
+}
+
+// validateResponseContent mirrors the ValidateResponses rules for a single content string
+func validateResponseContent(s string) error {
+	if s == "" {
+		return fmt.Errorf("response content cannot be empty")
+	}
+	// The content lands inside a python string literal so these characters would break the generated file
+	if strings.ContainsAny(s, "\"\\\n") {
+		return fmt.Errorf("response content cannot contain double quotes, backslashes, or newlines")
+	}
+	return nil
+}
+
+// validateAcceptedCommand runs the full command validation against the commands accepted so far
+func validateAcceptedCommand(modelValues Values) error {
+	if modelValues.Map["currentCommand"] == nil || *modelValues.Map["currentCommand"] == "" {
+		return fmt.Errorf("there is no command to validate")
+	}
+	command, err := JSONToCmdInfo(*modelValues.Map["currentCommand"])
+	if err != nil {
+		return fmt.Errorf("failed to read the current command: %w", err)
+	}
+
+	var existing []CommandInfo
+	if modelValues.Map["slashCommands"] != nil {
+		slashCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["slashCommands"])
+		existing = append(existing, slashCommandList...)
+	}
+	if modelValues.Map["prefixCommands"] != nil {
+		prefixCommandList, _ := JSONToCmdInfoSlice(*modelValues.Map["prefixCommands"])
+		existing = append(existing, prefixCommandList...)
+	}
+	return ValidateCommand(*command, existing)
+}
+
+func addMultiPageFormGenerator(values Values, modelValues Values) *huh.Form {
+	multiPageForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Do you want the modal to use multiple pages?").
+				Affirmative("yes").
+				Negative("no").
+				Validate(func(b bool) error {
+					var s string
+					if b {
+						s = "yes"
+					} else {
+						s = "no"
+					}
+					values.Map["multiPageConfirm"] = &s
+					return nil
+				}),
+		),
+	)
+	return multiPageForm
+}
+
+func addPageInfoFormGenerator(values Values, modelValues Values) *huh.Form {
+	pageInfoForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Value(values.Map["pageName"]).
+				Title("Enter the page name").
+				Prompt("> ").
+				Validate(func(s string) error {
+					var pages []PageInfo
+					if modelValues.Map["pages"] != nil {
+						pages, _ = JSONToPageInfoSlice(*modelValues.Map["pages"])
+					}
+					return validatePageName(s, pages)
+				}),
+			huh.NewInput().
+				Value(values.Map["pageTitle"]).
+				Title("Enter the page title").
+				Prompt("> ").
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("page title cannot be empty")
+					}
+					return nil
+				}),
+		),
+	)
+	return pageInfoForm
+}
+
+func addPageFieldStartFormGenerator(values Values, modelValues Values) *huh.Form {
+	pageFieldStartForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Do you want to add a field to this page?").
+				Affirmative("yes").
+				Negative("no").
+				Validate(func(b bool) error {
+					var s string
+					if b {
+						s = "yes"
+					} else {
+						s = "no"
+					}
+					values.Map["pageFieldStartConfirm"] = &s
+					return nil
+				}),
+		),
+	)
+	return pageFieldStartForm
+}
+
+func addBranchStartFormGenerator(values Values, modelValues Values) *huh.Form {
+	branchStartForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Do you want to add a branch rule to this page?").
+				Affirmative("yes").
+				Negative("no").
+				Validate(func(b bool) error {
+					var s string
+					if b {
+						s = "yes"
+					} else {
+						s = "no"
+					}
+					values.Map["branchStartConfirm"] = &s
+					return nil
+				}),
+		),
+	)
+	return branchStartForm
+}
+
+func addBranchInfoFormGenerator(values Values, modelValues Values) *huh.Form {
+	var currentPage PageInfo
+	if modelValues.Map["currentPage"] != nil {
+		currentPage, _ = jsonToPage(*modelValues.Map["currentPage"])
+	}
+
+	// The branch can only test a field the user already added to this page
+	fieldOptions := make([]huh.Option[string], 0, len(currentPage.Fields))
+	for _, field := range currentPage.Fields {
+		fieldOptions = append(fieldOptions, huh.NewOption(field.Name, field.Name))
+	}
+
+	var fieldPicker huh.Field
+	if len(fieldOptions) > 0 {
+		fieldPicker = huh.NewSelect[string]().
+			Value(values.Map["branchField"]).
+			Title("Select the field this branch tests").
+			Options(fieldOptions...)
+	} else {
+		// The branch start guard makes this unreachable in the normal flow, keep a fallback anyway
+		fieldPicker = huh.NewInput().
+			Value(values.Map["branchField"]).
+			Title("Enter the field this branch tests").
+			Prompt("> ")
+	}
+
+	branchInfoForm := huh.NewForm(
+		huh.NewGroup(
+			fieldPicker,
+			huh.NewInput().
+				Value(values.Map["branchEquals"]).
+				Title("Enter the value that triggers this branch").
+				Prompt("> "),
+			huh.NewInput().
+				Value(values.Map["branchGoto"]).
+				Title("Enter the page to jump to when the value matches").
+				Prompt("> ").
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("branch goto cannot be empty")
+					}
+					// The target page may not exist yet, the accept step validates the full flow
+					return validatePageReference(s)
+				}),
+		),
+	)
+	return branchInfoForm
+}
+
+func addPageNextFormGenerator(values Values, modelValues Values) *huh.Form {
+	pageNextForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Value(values.Map["pageNext"]).
+				Title("Enter the default next page (leave empty to end the flow)").
+				Prompt("> ").
+				Validate(validatePageReference),
+			huh.NewConfirm().
+				Title("Do you want to add another page?").
+				Affirmative("yes").
+				Negative("no").
+				Validate(func(b bool) error {
+					var s string
+					if b {
+						s = "yes"
+					} else {
+						s = "no"
+					}
+					values.Map["pageAnotherConfirm"] = &s
+					return nil
+				}),
+		),
+	)
+	return pageNextForm
+}
+
+func addResponseStartFormGenerator(values Values, modelValues Values) *huh.Form {
+	responseStartForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Do you want to add a custom response?").
+				Affirmative("yes").
+				Negative("no").
+				Validate(func(b bool) error {
+					var s string
+					if b {
+						s = "yes"
+					} else {
+						s = "no"
+					}
+					values.Map["responseStartConfirm"] = &s
+					return nil
+				}),
+		),
+	)
+	return responseStartForm
+}
+
+func addResponseInfoFormGenerator(values Values, modelValues Values) *huh.Form {
+	responseInfoForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Value(values.Map["responseContent"]).
+				Title("Enter the response message content").
+				Prompt("> ").
+				Validate(validateResponseContent),
+			huh.NewConfirm().
+				Title("Should the response be ephemeral?").
+				Affirmative("yes").
+				Negative("no").
+				Validate(func(b bool) error {
+					var s string
+					if b {
+						s = "yes"
+					} else {
+						s = "no"
+					}
+					values.Map["responseEphemeral"] = &s
+					return nil
+				}),
+		),
+	)
+	return responseInfoForm
 }
 
 /**

@@ -6,6 +6,7 @@ See end of file for extended copyright information
 package utils
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -108,14 +109,18 @@ func AddModel(callback func(*Model) []error, initCallback func(*Model, []Values)
 	m.ModelValues.Map = map[string]*string{
 		"filename":       new(string),
 		"currentCommand": new(string),
+		"currentPage":    new(string),
+		"pages":          new(string),
 		"slashCommands":  new(string),
 		"prefixCommands": new(string),
 	}
 
 	emptySlash := "[]"
 	emptyPrefix := "[]"
+	emptyPages := "[]"
 	m.ModelValues.Map["slashCommands"] = &emptySlash
 	m.ModelValues.Map["prefixCommands"] = &emptyPrefix
+	m.ModelValues.Map["pages"] = &emptyPages
 
 	addForms := AddFormWrapperGenerator()
 
@@ -126,18 +131,30 @@ func AddModel(callback func(*Model) []error, initCallback func(*Model, []Values)
 		display.WriteString(s.KeyText.Render("Cog Name: ") + s.ValueText.Render(*m.ModelValues.Map["filename"]) + "\n")
 		slashCommands, _ := JSONToCmdInfoSlice(*m.ModelValues.Map["slashCommands"])
 		prefixCommands, _ := JSONToCmdInfoSlice(*m.ModelValues.Map["prefixCommands"])
+		// Commands that declare expected responses get a marker after their signature
+		responsesMark := func(command CommandInfo) string {
+			if len(command.Responses) == 0 {
+				return ""
+			}
+			return fmt.Sprintf(" [responses: %d]", len(command.Responses))
+		}
 		if len(slashCommands) > 0 {
 			display.WriteString(s.KeyText.Render("Slash Commands:") + "\n")
 			for _, slashCommand := range slashCommands {
-				// Modal commands take no arguments, so their fields are shown instead
+				// Modal commands take no arguments, so their fields or pages are shown instead
 				if slashCommand.Type == "modal" {
-					var fields []string
-					for _, field := range slashCommand.Fields {
-						fields = append(fields, field.Name+": "+field.Style)
+					var modalStr string
+					if len(slashCommand.Pages) > 0 {
+						modalStr = fmt.Sprintf("%d pages", len(slashCommand.Pages))
+					} else {
+						var fields []string
+						for _, field := range slashCommand.Fields {
+							fields = append(fields, field.Name+": "+field.Style)
+						}
+						modalStr = strings.Join(fields, ", ")
 					}
-					fieldsStr := strings.Join(fields, ", ")
 
-					commandLine := slashCommand.Name + " [modal: " + fieldsStr + "] -> " + slashCommand.ReturnType
+					commandLine := slashCommand.Name + " [modal: " + modalStr + "] -> " + slashCommand.ReturnType + responsesMark(slashCommand)
 					display.WriteString("    - " + s.ValueText.Render(commandLine) + "\n")
 					continue
 				}
@@ -148,7 +165,7 @@ func AddModel(callback func(*Model) []error, initCallback func(*Model, []Values)
 				}
 				argsStr := strings.Join(args, ", ")
 
-				commandLine := slashCommand.Name + "(" + argsStr + ") -> " + slashCommand.ReturnType
+				commandLine := slashCommand.Name + "(" + argsStr + ") -> " + slashCommand.ReturnType + responsesMark(slashCommand)
 				display.WriteString("    - " + s.ValueText.Render(commandLine) + "\n")
 			}
 		}
@@ -161,7 +178,7 @@ func AddModel(callback func(*Model) []error, initCallback func(*Model, []Values)
 				}
 				argsStr := strings.Join(args, ", ")
 
-				commandLine := prefixCommand.Name + "(" + argsStr + ") -> " + prefixCommand.ReturnType
+				commandLine := prefixCommand.Name + "(" + argsStr + ") -> " + prefixCommand.ReturnType + responsesMark(prefixCommand)
 				display.WriteString("    - " + s.ValueText.Render(commandLine) + "\n")
 			}
 		}

@@ -291,6 +291,195 @@ func TestValidateCommandModal(t *testing.T) {
 	}
 }
 
+func TestValidateCommandPages(t *testing.T) {
+	valid := CommandInfo{
+		Name:        "survey",
+		Scope:       "guild",
+		Type:        "modal",
+		Description: "Runs a survey",
+		ReturnType:  "None",
+		Pages: []PageInfo{
+			{
+				Name:     "start",
+				Title:    "Start",
+				Fields:   []FieldInfo{{Name: "track", Label: "Track", Style: "short", Required: true}},
+				Branches: []BranchRule{{Field: "track", Equals: "backend", Goto: "wrap"}},
+				Next:     "wrap",
+			},
+			{
+				Name:   "wrap",
+				Title:  "Wrap up",
+				Fields: []FieldInfo{{Name: "comments", Label: "Comments", Style: "paragraph"}},
+			},
+		},
+	}
+
+	if err := ValidateCommand(valid, nil); err != nil {
+		t.Errorf("valid multi page command should pass, got %v", err)
+	}
+
+	bothShapes := valid
+	bothShapes.Fields = []FieldInfo{{Name: "summary", Label: "Summary", Style: "short"}}
+	if err := ValidateCommand(bothShapes, nil); err == nil {
+		t.Error("modal command with both fields and pages should fail")
+	}
+
+	neitherShape := valid
+	neitherShape.Pages = nil
+	if err := ValidateCommand(neitherShape, nil); err == nil {
+		t.Error("modal command without fields or pages should fail")
+	}
+
+	slashWithPages := valid
+	slashWithPages.Type = "slash"
+	if err := ValidateCommand(slashWithPages, nil); err == nil {
+		t.Error("non modal command with pages should fail")
+	}
+
+	tooManyPages := valid
+	tooManyPages.Pages = nil
+	for i := 0; i < MaxFlowPages+1; i++ {
+		tooManyPages.Pages = append(tooManyPages.Pages, PageInfo{
+			Name:   fmt.Sprintf("page%d", i),
+			Title:  fmt.Sprintf("Page %d", i),
+			Fields: []FieldInfo{{Name: "field", Label: "Field", Style: "short"}},
+		})
+	}
+	if err := ValidateCommand(tooManyPages, nil); err == nil {
+		t.Error("eleven pages should fail")
+	}
+
+	dupePageNames := valid
+	dupePageNames.Pages = []PageInfo{
+		{Name: "start", Title: "First", Fields: []FieldInfo{{Name: "a", Label: "A", Style: "short"}}},
+		{Name: "start", Title: "Second", Fields: []FieldInfo{{Name: "b", Label: "B", Style: "short"}}},
+	}
+	if err := ValidateCommand(dupePageNames, nil); err == nil {
+		t.Error("duplicate page names should fail")
+	}
+
+	emptyPageName := valid
+	emptyPageName.Pages = []PageInfo{
+		{Name: "", Title: "First", Fields: []FieldInfo{{Name: "a", Label: "A", Style: "short"}}},
+	}
+	if err := ValidateCommand(emptyPageName, nil); err == nil {
+		t.Error("empty page name should fail")
+	}
+
+	sixFieldPage := valid
+	sixFieldPage.Pages = []PageInfo{{Name: "start", Title: "Start"}}
+	for i := 0; i < MaxModalFields+1; i++ {
+		sixFieldPage.Pages[0].Fields = append(sixFieldPage.Pages[0].Fields, FieldInfo{
+			Name:  fmt.Sprintf("field%d", i),
+			Label: fmt.Sprintf("Field %d", i),
+			Style: "short",
+		})
+	}
+	if err := ValidateCommand(sixFieldPage, nil); err == nil {
+		t.Error("page with six fields should fail")
+	}
+
+	fieldlessPage := valid
+	fieldlessPage.Pages = []PageInfo{{Name: "start", Title: "Start"}}
+	if err := ValidateCommand(fieldlessPage, nil); err == nil {
+		t.Error("page without fields should fail")
+	}
+
+	badBranchField := valid
+	badBranchField.Pages = []PageInfo{
+		{
+			Name:     "start",
+			Title:    "Start",
+			Fields:   []FieldInfo{{Name: "track", Label: "Track", Style: "short"}},
+			Branches: []BranchRule{{Field: "missing", Equals: "x", Goto: "start"}},
+		},
+	}
+	if err := ValidateCommand(badBranchField, nil); err == nil {
+		t.Error("branch field that is not on the page should fail")
+	}
+
+	badGoto := valid
+	badGoto.Pages = []PageInfo{
+		{
+			Name:     "start",
+			Title:    "Start",
+			Fields:   []FieldInfo{{Name: "track", Label: "Track", Style: "short"}},
+			Branches: []BranchRule{{Field: "track", Equals: "x", Goto: "nowhere"}},
+		},
+	}
+	if err := ValidateCommand(badGoto, nil); err == nil {
+		t.Error("branch goto pointing at a missing page should fail")
+	}
+
+	badNext := valid
+	badNext.Pages = []PageInfo{
+		{
+			Name:   "start",
+			Title:  "Start",
+			Fields: []FieldInfo{{Name: "track", Label: "Track", Style: "short"}},
+			Next:   "nowhere",
+		},
+	}
+	if err := ValidateCommand(badNext, nil); err == nil {
+		t.Error("next pointing at a missing page should fail")
+	}
+}
+
+func TestValidateResponses(t *testing.T) {
+	valid := []ResponseInfo{{Type: "message", Content: "done", Ephemeral: true}}
+	if err := ValidateResponses(valid); err != nil {
+		t.Errorf("valid responses should pass, got %v", err)
+	}
+
+	if err := ValidateResponses(nil); err != nil {
+		t.Errorf("no responses should pass, got %v", err)
+	}
+
+	badType := []ResponseInfo{{Type: "embed", Content: "done"}}
+	if err := ValidateResponses(badType); err == nil {
+		t.Error("unknown response type should fail")
+	}
+
+	emptyContent := []ResponseInfo{{Type: "message", Content: ""}}
+	if err := ValidateResponses(emptyContent); err == nil {
+		t.Error("empty content should fail")
+	}
+
+	quotedContent := []ResponseInfo{{Type: "message", Content: `say "hi"`}}
+	if err := ValidateResponses(quotedContent); err == nil {
+		t.Error("content with double quotes should fail")
+	}
+
+	var tooMany []ResponseInfo
+	for i := 0; i < MaxCommandResponses+1; i++ {
+		tooMany = append(tooMany, ResponseInfo{Type: "message", Content: fmt.Sprintf("reply %d", i)})
+	}
+	if err := ValidateResponses(tooMany); err == nil {
+		t.Error("four responses should fail")
+	}
+}
+
+func TestValidateCommandResponses(t *testing.T) {
+	valid := CommandInfo{
+		Name:        "greet",
+		Scope:       "global",
+		Type:        "slash",
+		Description: "Greets a member",
+		ReturnType:  "None",
+		Responses:   []ResponseInfo{{Type: "message", Content: "Hello {member}", Ephemeral: false}},
+	}
+
+	if err := ValidateCommand(valid, nil); err != nil {
+		t.Errorf("slash command with responses should pass, got %v", err)
+	}
+
+	badResponse := valid
+	badResponse.Responses = []ResponseInfo{{Type: "message", Content: ""}}
+	if err := ValidateCommand(badResponse, nil); err == nil {
+		t.Error("command with an empty response content should fail")
+	}
+}
+
 func TestValidateCommandScopeAndReturnType(t *testing.T) {
 	if err := ValidateCommandScope("guild"); err != nil {
 		t.Errorf("guild should be valid, got %v", err)

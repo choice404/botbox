@@ -184,6 +184,83 @@ func TestParseCogFile(t *testing.T) {
 			},
 		},
 		{
+			name: "multi page modal command with a flow blob",
+			file: "multipageCog",
+			want: ParsedCogInfo{
+				FileName:    "multipageCog",
+				CogName:     "MultipageCog",
+				Author:      "Austin Choi",
+				ProjectName: "TestBot",
+				Description: "A discord bot used by the parser tests",
+				SlashCommands: []CommandInfo{
+					{
+						Name:        "survey",
+						Scope:       "guild",
+						Type:        "modal",
+						Description: "Runs a short survey",
+						ReturnType:  "None",
+						Pages: []PageInfo{
+							{
+								Name:     "start",
+								Title:    "Survey start",
+								Fields:   []FieldInfo{{Name: "track", Label: "Track", Style: "short", Required: true, Placeholder: "backend or frontend"}},
+								Branches: []BranchRule{{Field: "track", Equals: "backend", Goto: "backend"}},
+								Next:     "wrap",
+							},
+							{
+								Name:   "backend",
+								Title:  "Backend questions",
+								Fields: []FieldInfo{{Name: "language", Label: "Favorite language", Style: "short", Required: true}},
+								Next:   "wrap",
+							},
+							{
+								Name:   "wrap",
+								Title:  "Wrap up",
+								Fields: []FieldInfo{{Name: "comments", Label: "Comments", Style: "paragraph", Required: false}},
+							},
+						},
+						Responses: []ResponseInfo{{Type: "message", Content: "Thanks, track {track} recorded", Ephemeral: true}},
+					},
+				},
+			},
+		},
+		{
+			name: "slash command with a response and prefix command with the default echo",
+			file: "responseCog",
+			want: ParsedCogInfo{
+				FileName:    "responseCog",
+				CogName:     "ResponseCog",
+				Author:      "Austin Choi",
+				ProjectName: "TestBot",
+				Description: "A discord bot used by the parser tests",
+				SlashCommands: []CommandInfo{
+					{
+						Name:        "greet",
+						Scope:       "global",
+						Type:        "slash",
+						Description: "Greets a member",
+						ReturnType:  "None",
+						Args: []ArgInfo{
+							{Name: "member", Type: "str", Description: "Who to greet"},
+						},
+						Responses: []ResponseInfo{{Type: "message", Content: "Hello {member}", Ephemeral: false}},
+					},
+				},
+				PrefixCommands: []CommandInfo{
+					{
+						Name:        "ping",
+						Scope:       "global",
+						Type:        "prefix",
+						Description: `Replies with pong when the user types "/ping"`,
+						ReturnType:  "None",
+						Args: []ArgInfo{
+							{Name: "count", Type: "int"},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "decorators the command regex cannot match",
 			file: "oddShape",
 			want: ParsedCogInfo{
@@ -227,6 +304,8 @@ func TestParseAllCogFiles(t *testing.T) {
 		"modalCog":      false,
 		"adminCog":      false,
 		"helpCog":       false,
+		"multipageCog":  false,
+		"responseCog":   false,
 	}
 
 	if len(parsed) != len(want) {
@@ -440,6 +519,116 @@ func TestModalCommandTemplateParseRoundTrip(t *testing.T) {
 	}
 }
 
+// TestMultiPageCommandTemplateParseRoundTrip renders a multi page flow and checks the FLOW blob reads back unchanged
+func TestMultiPageCommandTemplateParseRoundTrip(t *testing.T) {
+	survey := CommandInfo{
+		Name:        "survey",
+		Scope:       "guild",
+		Type:        "modal",
+		Description: "Runs a short survey",
+		ReturnType:  "None",
+		Pages: []PageInfo{
+			{
+				Name:     "start",
+				Title:    "Survey start",
+				Fields:   []FieldInfo{{Name: "track", Label: "Track", Style: "short", Required: true, Placeholder: "backend or frontend"}},
+				Branches: []BranchRule{{Field: "track", Equals: "backend", Goto: "backend"}},
+				Next:     "wrap",
+			},
+			{
+				Name:   "backend",
+				Title:  "Backend questions",
+				Fields: []FieldInfo{{Name: "language", Label: "Favorite language", Style: "short", Required: true}},
+				Next:   "wrap",
+			},
+			{
+				Name:   "wrap",
+				Title:  "Wrap up",
+				Fields: []FieldInfo{{Name: "comments", Label: "Comments", Style: "paragraph", Required: false}},
+			},
+		},
+		Responses: []ResponseInfo{{Type: "message", Content: "Thanks, track {track} recorded", Ephemeral: true}},
+	}
+
+	content, err := RenderTemplate("cog.py.tmpl", CogTemplateData{
+		Author:         "Austin Choi",
+		BotName:        "TestBot",
+		BotDescription: "A discord bot used by the parser tests",
+		ClassName:      "MultipageCog",
+		Filename:       "multipageCog",
+		SlashCommands:  []CommandInfo{survey},
+	})
+	if err != nil {
+		t.Fatalf("RenderTemplate returned error: %v", err)
+	}
+
+	path := filepath.Join(t.TempDir(), "multipageCog.py")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write rendered cog: %v", err)
+	}
+
+	parsed, err := parseCogFile(path, "multipageCog")
+	if err != nil {
+		t.Fatalf("parseCogFile returned error: %v", err)
+	}
+
+	if !commandsEqual(parsed.SlashCommands, []CommandInfo{survey}) {
+		t.Errorf("round trip changed the command\ngot:  %+v\nwant: %+v", parsed.SlashCommands, survey)
+	}
+}
+
+// TestResponseCommandTemplateParseRoundTrip renders commands with and without responses and checks both read back
+func TestResponseCommandTemplateParseRoundTrip(t *testing.T) {
+	greet := CommandInfo{
+		Name:        "greet",
+		Scope:       "global",
+		Type:        "slash",
+		Description: "Greets a member",
+		ReturnType:  "None",
+		Args:        []ArgInfo{{Name: "member", Type: "str", Description: "Who to greet"}},
+		Responses:   []ResponseInfo{{Type: "message", Content: "Hello {member}", Ephemeral: false}},
+	}
+
+	// The echo command has no responses so its generated reply must parse back to none
+	echo := CommandInfo{
+		Name:        "echo",
+		Scope:       "global",
+		Type:        "slash",
+		Description: "Echoes nothing",
+		ReturnType:  "None",
+	}
+
+	content, err := RenderTemplate("cog.py.tmpl", CogTemplateData{
+		Author:         "Austin Choi",
+		BotName:        "TestBot",
+		BotDescription: "A discord bot used by the parser tests",
+		ClassName:      "ResponseCog",
+		Filename:       "responseCog",
+		SlashCommands:  []CommandInfo{greet, echo},
+	})
+	if err != nil {
+		t.Fatalf("RenderTemplate returned error: %v", err)
+	}
+
+	path := filepath.Join(t.TempDir(), "responseCog.py")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write rendered cog: %v", err)
+	}
+
+	parsed, err := parseCogFile(path, "responseCog")
+	if err != nil {
+		t.Fatalf("parseCogFile returned error: %v", err)
+	}
+
+	if !commandsEqual(parsed.SlashCommands, []CommandInfo{greet, echo}) {
+		t.Errorf("round trip changed the commands\ngot:  %+v\nwant: %+v", parsed.SlashCommands, []CommandInfo{greet, echo})
+	}
+
+	if len(parsed.SlashCommands) == 2 && parsed.SlashCommands[1].Responses != nil {
+		t.Errorf("default echo reply parsed as responses: %+v", parsed.SlashCommands[1].Responses)
+	}
+}
+
 func TestCommandEqual(t *testing.T) {
 	base := CommandInfo{
 		Name:        "greet",
@@ -486,6 +675,37 @@ func TestCommandEqual(t *testing.T) {
 	withExtraField := modal
 	withExtraField.Fields = append(append([]FieldInfo{}, modal.Fields...), FieldInfo{Name: "details", Label: "Details", Style: "paragraph"})
 
+	flow := CommandInfo{
+		Name:        "survey",
+		Scope:       "guild",
+		Type:        "modal",
+		Description: "Runs a survey",
+		ReturnType:  "None",
+		Pages: []PageInfo{
+			{
+				Name:     "start",
+				Title:    "Start",
+				Fields:   []FieldInfo{{Name: "track", Label: "Track", Style: "short", Required: true}},
+				Branches: []BranchRule{{Field: "track", Equals: "backend", Goto: "start"}},
+			},
+		},
+		Responses: []ResponseInfo{{Type: "message", Content: "done", Ephemeral: true}},
+	}
+
+	withPageTitle := flow
+	withPageTitle.Pages = []PageInfo{flow.Pages[0]}
+	withPageTitle.Pages[0].Title = "Other"
+
+	withBranchGoto := flow
+	withBranchGoto.Pages = []PageInfo{flow.Pages[0]}
+	withBranchGoto.Pages[0].Branches = []BranchRule{{Field: "track", Equals: "backend", Goto: "other"}}
+
+	withResponseContent := flow
+	withResponseContent.Responses = []ResponseInfo{{Type: "message", Content: "changed", Ephemeral: true}}
+
+	withoutResponses := flow
+	withoutResponses.Responses = nil
+
 	tests := []struct {
 		name string
 		a    CommandInfo
@@ -503,6 +723,11 @@ func TestCommandEqual(t *testing.T) {
 		{"different field label", modal, withFieldLabel, false},
 		{"different field required", modal, withFieldRequired, false},
 		{"extra field", modal, withExtraField, false},
+		{"identical flow", flow, flow, true},
+		{"different page title", flow, withPageTitle, false},
+		{"different branch goto", flow, withBranchGoto, false},
+		{"different response content", flow, withResponseContent, false},
+		{"missing responses", flow, withoutResponses, false},
 	}
 
 	for _, tt := range tests {

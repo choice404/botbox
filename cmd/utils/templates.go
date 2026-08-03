@@ -7,6 +7,7 @@ package utils
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"text/template"
@@ -28,12 +29,18 @@ type CogTemplateData struct {
 
 // templateFuncs holds the helpers available inside all templates
 var templateFuncs = template.FuncMap{
-	"returnValue": GetReturnValue,
-	"argString":   BuildArgString,
-	"underscore":  underscoreName,
-	"modalClass":  ModalClassName,
-	"modalTitle":  modalTitle,
-	"pyBool":      pythonBool,
+	"returnValue":       GetReturnValue,
+	"argString":         BuildArgString,
+	"underscore":        underscoreName,
+	"modalClass":        ModalClassName,
+	"modalTitle":        modalTitle,
+	"pyBool":            pythonBool,
+	"pascal":            pascalName,
+	"cmdConst":          CommandConstName,
+	"pageModal":         pageModalClass,
+	"flowJSON":          flowJSON,
+	"responseContent":   responseContent,
+	"responseEphemeral": responseEphemeral,
 }
 
 // RenderTemplate renders the named embedded template with the given data
@@ -88,8 +95,8 @@ func underscoreName(name string) string {
 	return strings.ReplaceAll(name, "-", "_")
 }
 
-// ModalClassName turns a command name into the class name of its generated modal
-func ModalClassName(name string) string {
+// pascalName turns a dashed or underscored name into PascalCase for generated class names
+func pascalName(name string) string {
 	parts := strings.FieldsFunc(name, func(r rune) bool {
 		return r == '-' || r == '_'
 	})
@@ -99,9 +106,55 @@ func ModalClassName(name string) string {
 		runes := []rune(part)
 		builder.WriteString(strings.ToUpper(string(runes[0])) + string(runes[1:]))
 	}
-	builder.WriteString("Modal")
 
 	return builder.String()
+}
+
+// ModalClassName turns a command name into the class name of its generated modal
+func ModalClassName(name string) string {
+	return pascalName(name) + "Modal"
+}
+
+// pageModalClass builds the class name of the modal generated for one page of a flow
+func pageModalClass(commandName, pageName string) string {
+	return pascalName(commandName) + pascalName(pageName) + "Modal"
+}
+
+// CommandConstName turns a command name into the prefix of its generated flow constants
+func CommandConstName(name string) string {
+	return strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
+}
+
+// commandFlow mirrors the JSON blob rendered next to a multi page modal command
+type commandFlow struct {
+	Pages     []PageInfo
+	Responses []ResponseInfo
+}
+
+// flowJSON renders the pages and responses of a multi page modal command as an indented JSON blob
+func flowJSON(cmd CommandInfo) (string, error) {
+	flow := commandFlow{Pages: cmd.Pages, Responses: cmd.Responses}
+	jsonData, err := json.MarshalIndent(flow, "", "    ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal flow for command %s: %w", cmd.Name, err)
+	}
+	return string(jsonData), nil
+}
+
+// responseContent returns the first expected response content or falls back to echoing the command name
+func responseContent(cmd CommandInfo) string {
+	if len(cmd.Responses) > 0 {
+		return cmd.Responses[0].Content
+	}
+	return cmd.Name
+}
+
+// responseEphemeral renders the ephemeral flag of the first expected response, defaulting to True
+func responseEphemeral(cmd CommandInfo) string {
+	if len(cmd.Responses) > 0 {
+		return pythonBool(cmd.Responses[0].Ephemeral)
+	}
+	return "True"
 }
 
 // modalTitle trims a command description down to Discord's 45 character modal title limit

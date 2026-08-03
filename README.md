@@ -47,6 +47,8 @@ Built with **Go**, [`Cobra`](https://github.com/spf13/cobra), [`Bubble Tea`](htt
 
 -   **Headless Mode**: Every command can run without the interactive TUI using flags, so Bot Box works in scripts and CI.
 -   **Modal Commands**: Generate slash commands that open Discord modals with up to five text inputs, defined interactively or from JSON.
+-   **Multipage Modal Flows**: Chain up to ten modal pages with branching rules that route users based on their answers, bridged by Continue buttons since Discord can't chain modals directly.
+-   **Custom Responses**: Any command can define its own response messages, and modal flow responses can substitute submitted values with {field} placeholders.
 -   **Built-in Logging**: Generated bots come with a ready to use logger with file rotation and console output, configured through LOG_LEVEL and LOG_DIR.
 -   **Dynamic Help Command**: Generated bots include a permission aware, paginated /help that reads the live bot state, so it stays accurate after cogs are loaded, unloaded, or reloaded without a restart. Output format is controlled by bot.help_style (compact or detailed).
 -   **Admin Tools**: Generated bots ship with /sync, /status, /uptime, and /set-prefix, all locked behind administrator permissions and an OWNER_IDS owner check.
@@ -523,6 +525,7 @@ This will:
 
 ## 📜 Version History
 
+-   **2.10.0** Added multipage modal flows. Modal commands can now chain up to ten pages with branch rules that route users based on submitted values, with per user session state and Continue button bridges between pages. Added custom response messages for all command types with {field} placeholder substitution in flow responses. Both available in the TUI and headless mode with full config sync round trip through an embedded flow definition
 -   **2.9.0** Added Docker support. botbox docker init generates a Dockerfile, docker-compose.yml, and .dockerignore for any project, new projects can opt in at creation with the --docker flag or the new prompt, and the files adapt to .env or Doppler projects through the new bot.env_provider config key
 -   **2.8.0** Generated bots now include a dynamic /help command that filters by user permissions, paginates with buttons, reflects cog reloads without a restart, and formats output based on the new bot.help_style config key. Added an admin cog with /sync, /status, /uptime, and /set-prefix behind administrator permissions and an OWNER_IDS owner check. Fixed guild scoped commands being synced globally and cog reloads never re-registering commands
 -   **2.7.0** Added modal commands, a new command type that generates slash commands opening Discord modals with up to five text inputs, available in the TUI and headless mode with full config sync support. Generated bots now include a logger with file rotation under src/utils/logger.py, LOG_LEVEL and LOG_DIR in the .env, and all generated prints replaced with logger calls

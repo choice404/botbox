@@ -28,6 +28,15 @@ const DefaultHelpStyle = "compact"
 // Discord allows at most five text inputs on a single modal page
 const MaxModalFields = 5
 
+// MaxFlowPages caps how many pages a multi page modal flow can chain together
+const MaxFlowPages = 10
+
+// MaxCommandResponses caps how many expected responses a command can declare
+const MaxCommandResponses = 3
+
+// Valid response types, only plain messages exist today
+var validResponseTypes = []string{"message"}
+
 // Discord caps text input labels at 45 characters
 const maxFieldLabelLength = 45
 
@@ -263,6 +272,99 @@ func ValidateFieldStyle(s string) error {
 	return nil
 }
 
+// validateFields runs the shared field checks used by single page modals and flow pages
+func validateFields(fields []FieldInfo) error {
+	if len(fields) == 0 {
+		return fmt.Errorf("modal commands need at least one field")
+	}
+	if len(fields) > MaxModalFields {
+		return fmt.Errorf("modal commands can have at most %d fields", MaxModalFields)
+	}
+	for i, field := range fields {
+		if err := ValidateFieldName(field.Name, fields[:i]); err != nil {
+			return fmt.Errorf("field '%s': %w", field.Name, err)
+		}
+		if err := ValidateFieldLabel(field.Label); err != nil {
+			return fmt.Errorf("field '%s': %w", field.Name, err)
+		}
+		if err := ValidateFieldStyle(field.Style); err != nil {
+			return fmt.Errorf("field '%s': %w", field.Name, err)
+		}
+	}
+	return nil
+}
+
+// ValidatePages checks a multi page modal flow, the first page in the slice starts the flow
+func ValidatePages(pages []PageInfo) error {
+	if len(pages) == 0 {
+		return fmt.Errorf("multi page modal commands need at least one page")
+	}
+	if len(pages) > MaxFlowPages {
+		return fmt.Errorf("multi page modal commands can have at most %d pages", MaxFlowPages)
+	}
+
+	// Collect every page name first so branches can point forward or backward
+	pageNames := make(map[string]bool)
+	for _, page := range pages {
+		if page.Name == "" {
+			return fmt.Errorf("page names cannot be empty")
+		}
+		if strings.Contains(page.Name, " ") {
+			return fmt.Errorf("page '%s': page names cannot contain spaces", page.Name)
+		}
+		if pageNames[page.Name] {
+			return fmt.Errorf("page name '%s' is used more than once", page.Name)
+		}
+		pageNames[page.Name] = true
+	}
+
+	for _, page := range pages {
+		if err := validateFields(page.Fields); err != nil {
+			return fmt.Errorf("page '%s': %w", page.Name, err)
+		}
+
+		// Branches can only test fields the user filled in on this page
+		for _, branch := range page.Branches {
+			if !fieldExists(branch.Field, page.Fields) {
+				return fmt.Errorf("page '%s': branch field '%s' is not a field on this page", page.Name, branch.Field)
+			}
+			if branch.Goto == "" {
+				return fmt.Errorf("page '%s': branch goto cannot be empty", page.Name)
+			}
+			if !pageNames[branch.Goto] {
+				return fmt.Errorf("page '%s': branch goto '%s' is not a page name", page.Name, branch.Goto)
+			}
+		}
+
+		// An empty next ends the flow, anything else has to be a real page
+		if page.Next != "" && !pageNames[page.Next] {
+			return fmt.Errorf("page '%s': next page '%s' is not a page name", page.Name, page.Next)
+		}
+	}
+
+	return nil
+}
+
+// ValidateResponses checks the expected responses a command declares
+func ValidateResponses(responses []ResponseInfo) error {
+	if len(responses) > MaxCommandResponses {
+		return fmt.Errorf("commands can have at most %d responses", MaxCommandResponses)
+	}
+	for i, response := range responses {
+		if !contains(validResponseTypes, response.Type) {
+			return fmt.Errorf("response %d: type must be one of %s", i+1, strings.Join(validResponseTypes, ", "))
+		}
+		if response.Content == "" {
+			return fmt.Errorf("response %d: content cannot be empty", i+1)
+		}
+		// The content lands inside a python string literal so these characters would break the generated file
+		if strings.ContainsAny(response.Content, "\"\\\n") {
+			return fmt.Errorf("response %d: content cannot contain double quotes, backslashes, or newlines", i+1)
+		}
+	}
+	return nil
+}
+
 // ValidateCommand checks a full command definition against the already accepted commands
 func ValidateCommand(command CommandInfo, existing []CommandInfo) error {
 	if err := ValidateCommandName(command.Name, existing); err != nil {
@@ -280,31 +382,26 @@ func ValidateCommand(command CommandInfo, existing []CommandInfo) error {
 	if err := ValidateReturnType(command.ReturnType); err != nil {
 		return err
 	}
+	if err := ValidateResponses(command.Responses); err != nil {
+		return err
+	}
 	if command.Type == "modal" {
 		if len(command.Args) > 0 {
 			return fmt.Errorf("modal commands cannot have arguments")
 		}
-		if len(command.Fields) == 0 {
-			return fmt.Errorf("modal commands need at least one field")
+		if len(command.Fields) > 0 && len(command.Pages) > 0 {
+			return fmt.Errorf("modal commands cannot have both fields and pages")
 		}
-		if len(command.Fields) > MaxModalFields {
-			return fmt.Errorf("modal commands can have at most %d fields", MaxModalFields)
+		if len(command.Pages) > 0 {
+			return ValidatePages(command.Pages)
 		}
-		for i, field := range command.Fields {
-			if err := ValidateFieldName(field.Name, command.Fields[:i]); err != nil {
-				return fmt.Errorf("field '%s': %w", field.Name, err)
-			}
-			if err := ValidateFieldLabel(field.Label); err != nil {
-				return fmt.Errorf("field '%s': %w", field.Name, err)
-			}
-			if err := ValidateFieldStyle(field.Style); err != nil {
-				return fmt.Errorf("field '%s': %w", field.Name, err)
-			}
-		}
-		return nil
+		return validateFields(command.Fields)
 	}
 	if len(command.Fields) > 0 {
 		return fmt.Errorf("only modal commands can have fields")
+	}
+	if len(command.Pages) > 0 {
+		return fmt.Errorf("only modal commands can have pages")
 	}
 	for i, arg := range command.Args {
 		if err := ValidateArgName(arg.Name, command.Args[:i]); err != nil {

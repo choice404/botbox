@@ -22,16 +22,89 @@ load_dotenv()
 
 GUILD_ID = int(os.getenv("DISCORD_GUILD", 0))
 GUILD = discord.Object(id=GUILD_ID)
-<<range .SlashCommands>><<if eq .Type "modal">>
+<<range .SlashCommands>><<if eq .Type "modal">><<if .Pages>><<$cmd := .>>
+import json
+
+<<cmdConst .Name>>_FLOW = json.loads(r'''
+<<flowJSON .>>
+''')
+
+<<cmdConst .Name>>_PAGES = {page["Name"]: page for page in <<cmdConst .Name>>_FLOW["Pages"]}
+
+class SafeDict(dict):
+    def __missing__(self, key):
+        return "{" + key + "}"
+<<range .Pages>>
+class <<pageModal $cmd.Name .Name>>(discord.ui.Modal, title="<<modalTitle .Title>>"):<<range .Fields>>
+    <<.Name>> = discord.ui.TextInput(label="<<.Label>>", style=discord.TextStyle.<<.Style>>, required=<<pyBool .Required>><<if .Placeholder>>, placeholder="<<.Placeholder>>"<<end>>)<<end>>
+
+    def __init__(self, cog):
+        super().__init__()
+        self.cog = cog
+
+    async def on_submit(self, interaction: discord.Interaction):
+        session = self.cog.<<underscore $cmd.Name>>_sessions.setdefault(interaction.user.id, {})<<range .Fields>>
+        session["<<.Name>>"] = self.<<.Name>>.value<<end>>
+        await <<underscore $cmd.Name>>_advance(self.cog, interaction, "<<.Name>>", session)
+<<end>>
+class <<pascal .Name>>ContinueView(discord.ui.View):
+    def __init__(self, cog, next_page, user_id):
+        super().__init__(timeout=120)
+        self.cog = cog
+        self.next_page = next_page
+        self.user_id = user_id
+        self.message = None
+
+    @discord.ui.button(label="Continue", style=discord.ButtonStyle.primary)
+    async def continue_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(<<cmdConst .Name>>_MODALS[self.next_page](self.cog))
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+        if self.message is not None:
+            await self.message.edit(view=self)
+        self.cog.<<underscore .Name>>_sessions.pop(self.user_id, None)
+
+async def <<underscore .Name>>_advance(cog, interaction, page_name, session):
+    page = <<cmdConst .Name>>_PAGES[page_name]
+    next_page = page.get("Next") or ""
+    for branch in page.get("Branches") or []:
+        if session.get(branch["Field"]) == branch["Equals"]:
+            next_page = branch["Goto"]
+            break
+    if not next_page:
+        await <<underscore .Name>>_finish(cog, interaction, session)
+        return
+    view = <<pascal .Name>>ContinueView(cog, next_page, interaction.user.id)
+    await interaction.response.send_message(f"Continue to {<<cmdConst .Name>>_PAGES[next_page]['Title']}", view=view, ephemeral=True)
+    view.message = await interaction.original_response()
+
+async def <<underscore .Name>>_finish(cog, interaction, session):
+    responses = <<cmdConst .Name>>_FLOW.get("Responses") or []
+    if responses:
+        content = responses[0]["Content"].format_map(SafeDict(session))
+        ephemeral = bool(responses[0].get("Ephemeral"))
+    else:
+        content = "<<.Name>> submitted: " + " ".join(f"{key}={value}" for key, value in session.items())
+        ephemeral = True
+    await interaction.response.send_message(content, ephemeral=ephemeral)
+    cog.<<underscore .Name>>_sessions.pop(interaction.user.id, None)
+
+<<cmdConst .Name>>_MODALS = {<<range .Pages>>
+    "<<.Name>>": <<pageModal $cmd.Name .Name>>,<<end>>
+}
+<<else>>
 class <<modalClass .Name>>(discord.ui.Modal, title="<<modalTitle .Description>>"):<<range .Fields>>
     <<.Name>> = discord.ui.TextInput(label="<<.Label>>", style=discord.TextStyle.<<.Style>>, required=<<pyBool .Required>><<if .Placeholder>>, placeholder="<<.Placeholder>>"<<end>>)<<end>>
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.send_message(f"<<.Name>> submitted:<<range .Fields>> <<.Name>>={self.<<.Name>>.value}<<end>>", ephemeral=True)
-<<end>><<end>>
+<<end>><<end>><<end>>
 class <<.ClassName>>(commands.Cog, name="<<.ClassName>>"):
     def __init__(self, bot) -> None:
-        self.bot = bot
+        self.bot = bot<<range .SlashCommands>><<if .Pages>>
+        self.<<underscore .Name>>_sessions = {}<<end>><<end>>
         logger.info("<<.Filename>> cog loaded")
 <<range .SlashCommands>><<if eq .Type "modal">>
     @app_commands.command(name="<<.Name>>", description="<<.Description>>")<<if eq .Scope "guild">>
@@ -43,9 +116,12 @@ class <<.ClassName>>(commands.Cog, name="<<.ClassName>>"):
             Returns:
                     None
         """
-
-        await interaction.response.send_modal(<<modalClass .Name>>())
+<<if .Pages>>
+        self.<<underscore .Name>>_sessions[interaction.user.id] = {}
+        await interaction.response.send_modal(<<pageModal .Name (index .Pages 0).Name>>(self))
 <<else>>
+        await interaction.response.send_modal(<<modalClass .Name>>())
+<<end>><<else>>
     @app_commands.command(name="<<.Name>>", description="<<.Description>>")<<if .Args>>
     @app_commands.describe(<<range .Args>>
         <<.Name>>="<<.Description>>",<<end>>
@@ -63,7 +139,7 @@ class <<.ClassName>>(commands.Cog, name="<<.ClassName>>"):
         """
 
         try:
-            await interaction.response.send_message(f"<<.Name>>", ephemeral=True)
+            await interaction.response.send_message(f"<<responseContent .>>", ephemeral=<<responseEphemeral .>>)
         except Exception as e:
             logger.error(f"Error: {e}")
             await interaction.response.send_message(f"Error: {e}", ephemeral=True)
@@ -84,7 +160,7 @@ class <<.ClassName>>(commands.Cog, name="<<.ClassName>>"):
         """
 
         try:
-            await ctx.send(f"<<.Name>>", ephemeral=True)
+            await ctx.send(f"<<responseContent .>>", ephemeral=<<responseEphemeral .>>)
         except Exception as e:
             logger.error(f"Error: {e}")
             await ctx.send(f"Error: {e}", ephemeral=True)

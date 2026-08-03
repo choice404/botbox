@@ -8,7 +8,7 @@ package main
 import "github.com/choice404/botbox/v2/cmd"
 
 func main() {
-	cmd.Execute("v2.9.0")
+	cmd.Execute("v2.10.0")
 }
 
 /*

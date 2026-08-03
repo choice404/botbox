@@ -116,6 +116,8 @@ type CommandInfo struct {
 	Description string
 	Args        []ArgInfo
 	Fields      []FieldInfo
+	Pages       []PageInfo
+	Responses   []ResponseInfo
 	ReturnType  string
 }
 
@@ -198,6 +200,63 @@ func JSONToFieldInfoSlice(jsonString string) ([]FieldInfo, error) {
 	err := json.Unmarshal([]byte(jsonString), &slice)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON to FieldInfo slice: %w", err)
+	}
+	return slice, nil
+}
+
+// BranchRule sends the flow to a different page when a field on the current page matches a value
+type BranchRule struct {
+	Field  string
+	Equals string
+	Goto   string
+}
+
+// PageInfo describes a single modal page in a multi page command flow, an empty Next ends the flow
+type PageInfo struct {
+	Name     string
+	Title    string
+	Fields   []FieldInfo
+	Branches []BranchRule
+	Next     string
+}
+
+func PageInfoSliceToJSON(slice []PageInfo) (string, error) {
+	jsonData, err := json.Marshal(slice)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal PageInfo slice to JSON: %w", err)
+	}
+	return string(jsonData), nil
+}
+
+func JSONToPageInfoSlice(jsonString string) ([]PageInfo, error) {
+	var slice []PageInfo
+	err := json.Unmarshal([]byte(jsonString), &slice)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON to PageInfo slice: %w", err)
+	}
+	return slice, nil
+}
+
+// ResponseInfo describes an expected response a command sends when it finishes, only the message type exists today
+type ResponseInfo struct {
+	Type      string
+	Content   string
+	Ephemeral bool
+}
+
+func ResponseInfoSliceToJSON(slice []ResponseInfo) (string, error) {
+	jsonData, err := json.Marshal(slice)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal ResponseInfo slice to JSON: %w", err)
+	}
+	return string(jsonData), nil
+}
+
+func JSONToResponseInfoSlice(jsonString string) ([]ResponseInfo, error) {
+	var slice []ResponseInfo
+	err := json.Unmarshal([]byte(jsonString), &slice)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON to ResponseInfo slice: %w", err)
 	}
 	return slice, nil
 }
