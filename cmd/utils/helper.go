@@ -233,6 +233,7 @@ func RegenerateCogFile(rootDir string, config Config, cog CogConfig, backup bool
 		Filename:       cog.File,
 		SlashCommands:  cog.SlashCommands,
 		PrefixCommands: cog.PrefixCommands,
+		BlockGraphs:    cog.BlockGraphs,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to render cog template: %w", err)
@@ -374,6 +375,33 @@ func GetLocalConfigValue(key string) (any, error) {
 	default:
 		return nil, fmt.Errorf("invalid local config key: %s", key)
 	}
+}
+
+// SlashCommandOwners maps every slash command name in the project, plain and graph trigger,
+// to the file of the cog that registers it, the first owner wins on a collision
+func SlashCommandOwners(config Config) map[string]string {
+	owners := make(map[string]string)
+
+	for _, cog := range config.Cogs {
+		// Modal commands are slash commands too, they share the same name space
+		for _, command := range cog.SlashCommands {
+			if _, taken := owners[command.Name]; !taken {
+				owners[command.Name] = cog.File
+			}
+		}
+
+		for _, graph := range cog.BlockGraphs {
+			trigger, found := GraphTrigger(graph)
+			if !found || trigger.Type != BlockTriggerSlashCommand {
+				continue
+			}
+			if _, taken := owners[trigger.Config["name"]]; !taken {
+				owners[trigger.Config["name"]] = cog.File
+			}
+		}
+	}
+
+	return owners
 }
 
 /*

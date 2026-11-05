@@ -266,6 +266,13 @@ func CreateProject(rootDir string, values Values, force bool) error {
 		}
 	}
 
+	if blocksOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "utils", "blocks.py"), force); err == nil && blocksOpt {
+		err := renderToFile(filepath.Join(rootDir, "src", "utils", "blocks.py"), "blocks.py.tmpl", data)
+		if err != nil {
+			return fmt.Errorf("error creating blocks.py file: %w", err)
+		}
+	}
+
 	if utilsInitOpt, err := CreateFileOption(filepath.Join(rootDir, "src", "utils", "__init__.py"), force); err == nil && utilsInitOpt {
 		err := renderToFile(filepath.Join(rootDir, "src", "utils", "__init__.py"), "utils_init.py.tmpl", data)
 		if err != nil {

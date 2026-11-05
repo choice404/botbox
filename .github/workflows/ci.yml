@@ -25,6 +25,11 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Check formatting
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
 

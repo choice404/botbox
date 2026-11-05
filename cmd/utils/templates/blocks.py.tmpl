@@ -1,0 +1,182 @@
+"""
+Block graph runtime helper shared by every generated block graph
+
+Normalizes the different trigger contexts behind one BlockRun object so the
+generated block functions can send, react, and read values the same way no
+matter how the run started
+"""
+
+import discord
+
+try:
+    from utils.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import logging
+    logger = logging.getLogger(__name__)
+
+
+class SafeFormatDict(dict):
+    """
+    Leaves unknown placeholders untouched instead of raising KeyError
+    """
+
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+class BlockRun:
+    """
+    Carries the normalized context and per run state of one block graph run
+    """
+
+    def __init__(self, user=None, guild=None, channel=None, message=None, interaction=None, values=None):
+        self.user = user
+        self.guild = guild
+        self.channel = channel
+        self.message = message
+        self.interaction = interaction
+        self.values = dict(values or {})
+        self._seed_builtin_values()
+
+    def _seed_builtin_values(self):
+        """
+        Adds the context values every graph can branch on, ids are strings because branches compare strings
+        """
+
+        if self.user is not None:
+            self.values.setdefault("user_id", str(self.user.id))
+            self.values.setdefault("user_name", self.user.name)
+        if self.guild is not None:
+            self.values.setdefault("guild_id", str(self.guild.id))
+            self.values.setdefault("guild_name", self.guild.name)
+        if self.channel is not None:
+            self.values.setdefault("channel_id", str(self.channel.id))
+            self.values.setdefault("channel_name", getattr(self.channel, "name", ""))
+
+    @classmethod
+    def from_interaction(cls, interaction, values=None):
+        """
+        Builds a run from a slash command interaction
+
+            Parameters:
+                    interaction (discord.Interaction): The interaction that started the run
+                    values (dict): The argument values keyed by argument name
+
+            Returns:
+                    BlockRun: The normalized run context
+        """
+
+        return cls(
+            user=interaction.user,
+            guild=interaction.guild,
+            channel=interaction.channel,
+            message=None,
+            interaction=interaction,
+            values=values,
+        )
+
+    def get(self, source):
+        """
+        Reads a branch source value, empty string when the key is unknown
+
+            Parameters:
+                    source (str): The value name a branch block compares against
+
+            Returns:
+                    str: The stored value as a string
+        """
+
+        value = self.values.get(source)
+        return "" if value is None else str(value)
+
+    def format(self, content):
+        """
+        Substitutes {user}, {guild}, and argument placeholders in content
+
+            Parameters:
+                    content (str): The content with optional placeholders
+
+            Returns:
+                    str: The content with every known placeholder filled in
+        """
+
+        mapping = SafeFormatDict(self.values)
+        if self.user is not None:
+            mapping.setdefault("user", self.user.mention)
+        if self.guild is not None:
+            mapping.setdefault("guild", self.guild.name)
+        try:
+            return str(content).format_map(mapping)
+        except (ValueError, IndexError) as e:
+            logger.warning(f"placeholder syntax error in block content, sending it raw: {e}")
+            return str(content)
+
+    async def send(self, content, ephemeral=False):
+        """
+        Replies where the run started, first interaction reply then followups
+
+            Parameters:
+                    content (str): The message content to send
+                    ephemeral (bool): Whether an interaction reply is ephemeral
+
+            Returns:
+                    None
+        """
+
+        if self.interaction is not None:
+            if not self.interaction.response.is_done():
+                await self.interaction.response.send_message(content, ephemeral=ephemeral)
+            else:
+                await self.interaction.followup.send(content, ephemeral=ephemeral)
+            return
+        if self.channel is not None:
+            await self.channel.send(content)
+
+    async def send_dm(self, content):
+        """
+        DMs the triggering user, False when discord refuses the message
+
+            Parameters:
+                    content (str): The message content to send
+
+            Returns:
+                    bool: True when the DM went out
+        """
+
+        if self.user is None:
+            logger.warning("send_dm block skipped, run has no user")
+            return False
+        try:
+            await self.user.send(content)
+            return True
+        except discord.Forbidden:
+            logger.warning(f"send_dm block skipped, {self.user} has DMs closed")
+            return False
+        except discord.HTTPException as e:
+            logger.error(f"send_dm block failed for {self.user}: {e}")
+            return False
+
+    async def react(self, emoji):
+        """
+        Reacts to the triggering message, or to the run's own reply for interactions
+
+            Parameters:
+                    emoji (str): The emoji to react with
+
+            Returns:
+                    None
+        """
+
+        if self.message is not None:
+            await self.message.add_reaction(emoji)
+            return
+        if self.interaction is not None and self.interaction.response.is_done():
+            reply = await self.interaction.original_response()
+            await reply.add_reaction(emoji)
+            return
+        logger.warning("react block skipped, run has no message to react to")
+
+"""
+File generated by BotBox - https://github.com/choice404/botbox
+"""

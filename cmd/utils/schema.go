@@ -67,6 +67,9 @@ type CogConfig struct {
 	File           string        `json:"file"`
 	SlashCommands  []CommandInfo `json:"slash_commands"`
 	PrefixCommands []CommandInfo `json:"prefix_commands"`
+	// BlockGraphs holds the block behaviors attached to this cog,
+	// configs written before this key existed unmarshal to a nil slice and marshal unchanged
+	BlockGraphs []BlockGraph `json:"block_graphs,omitempty"`
 }
 
 func CogConfigSliceToJSON(slice []CogConfig) (string, error) {
@@ -261,6 +264,53 @@ func JSONToResponseInfoSlice(jsonString string) ([]ResponseInfo, error) {
 	return slice, nil
 }
 
+// BlockInfo is one typed node in a block graph
+type BlockInfo struct {
+	ID     string
+	Type   string
+	Config map[string]string
+}
+
+// EdgeInfo connects one block's named output port to another block
+type EdgeInfo struct {
+	From string
+	Port string
+	To   string
+}
+
+// BlockGraph is a named behavior attached to a cog, one trigger block plus the blocks it reaches
+type BlockGraph struct {
+	Name   string
+	Blocks []BlockInfo
+	Edges  []EdgeInfo
+}
+
+func BlockGraphSliceToJSON(slice []BlockGraph) (string, error) {
+	jsonData, err := json.Marshal(slice)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal BlockGraph slice to JSON: %w", err)
+	}
+	return string(jsonData), nil
+}
+
+func JSONToBlockGraphSlice(jsonString string) ([]BlockGraph, error) {
+	var slice []BlockGraph
+	err := json.Unmarshal([]byte(jsonString), &slice)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON to BlockGraph slice: %w", err)
+	}
+	return slice, nil
+}
+
+func JSONToBlockGraph(jsonString string) (*BlockGraph, error) {
+	var graph BlockGraph
+	err := json.Unmarshal([]byte(jsonString), &graph)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON to BlockGraph: %w", err)
+	}
+	return &graph, nil
+}
+
 type LicenseResponse struct {
 	Body string `json:"body"`
 }
@@ -273,6 +323,10 @@ type ParsedCogInfo struct {
 	Description    string
 	SlashCommands  []CommandInfo
 	PrefixCommands []CommandInfo
+	BlockGraphs    []BlockGraph
+	// BlockGraphErrors holds one error per graph blob the parser could not read,
+	// sync treats a non empty list as "the file has graphs I cannot see" and keeps the config
+	BlockGraphErrors []error
 }
 
 type SyncResult struct {
