@@ -25,6 +25,7 @@ type CogTemplateData struct {
 	Filename       string
 	SlashCommands  []CommandInfo
 	PrefixCommands []CommandInfo
+	BlockGraphs    []BlockGraph
 }
 
 // templateFuncs holds the helpers available inside all templates
@@ -41,6 +42,13 @@ var templateFuncs = template.FuncMap{
 	"flowJSON":          flowJSON,
 	"responseContent":   responseContent,
 	"responseEphemeral": responseEphemeral,
+	"blocksJSON":        blocksJSON,
+	"isTrigger":         isTriggerBlock,
+	"graphTrigger":      templateGraphTrigger,
+	"triggerArgs":       TriggerArgs,
+	"blockCfg":          blockConfigValue,
+	"blockCfgBool":      blockConfigBool,
+	"stepReturn":        stepReturn,
 }
 
 // RenderTemplate renders the named embedded template with the given data
@@ -139,6 +147,45 @@ func flowJSON(cmd CommandInfo) (string, error) {
 		return "", fmt.Errorf("failed to marshal flow for command %s: %w", cmd.Name, err)
 	}
 	return string(jsonData), nil
+}
+
+// blocksJSON renders a block graph as the indented JSON blob embedded next to its generated code
+func blocksJSON(graph BlockGraph) (string, error) {
+	jsonData, err := json.MarshalIndent(graph, "", "    ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal block graph %s: %w", graph.Name, err)
+	}
+	return string(jsonData), nil
+}
+
+// templateGraphTrigger returns the trigger block of a graph for the template, failing when it is missing
+func templateGraphTrigger(graph BlockGraph) (BlockInfo, error) {
+	trigger, found := GraphTrigger(graph)
+	if !found {
+		return BlockInfo{}, fmt.Errorf("graph %s has no trigger block", graph.Name)
+	}
+	return trigger, nil
+}
+
+// blockConfigValue reads one config key off a block, absent keys render as empty strings
+func blockConfigValue(block BlockInfo, key string) string {
+	return block.Config[key]
+}
+
+// blockConfigBool renders a "true"/"false" config key as a python literal, defaulting to False
+func blockConfigBool(block BlockInfo, key string) string {
+	return pythonBool(block.Config[key] == "true")
+}
+
+// stepReturn renders the python expression a block returns for one of its ports,
+// the id of the connected block or None when the port is unconnected
+func stepReturn(graph BlockGraph, blockID, port string) string {
+	for _, edge := range graph.Edges {
+		if edge.From == blockID && edge.Port == port {
+			return `"` + edge.To + `"`
+		}
+	}
+	return "None"
 }
 
 // responseContent returns the first expected response content or falls back to echoing the command name

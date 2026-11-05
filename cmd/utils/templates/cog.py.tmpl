@@ -100,7 +100,30 @@ class <<modalClass .Name>>(discord.ui.Modal, title="<<modalTitle .Description>>"
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.send_message(f"<<.Name>> submitted:<<range .Fields>> <<.Name>>={self.<<.Name>>.value}<<end>>", ephemeral=True)
+<<end>><<end>><<end>><<if .BlockGraphs>>
+import json
+
+from utils.blocks import BlockRun
+<<range .BlockGraphs>><<$g := .>>
+<<cmdConst .Name>>_BLOCKS = json.loads(r'''
+<<blocksJSON .>>
+''')
+<<range .Blocks>><<if not (isTrigger .)>>
+async def _<<underscore $g.Name>>_<<.ID>>(cog, run):  # <<.Type>>
+<<if eq .Type "action.send_message">>    await run.send(run.format("<<blockCfg . "content">>"), ephemeral=<<blockCfgBool . "ephemeral">>)
+    return <<stepReturn $g .ID "next">>
+<<end>><<if eq .Type "action.send_dm">>    await run.send_dm(run.format("<<blockCfg . "content">>"))
+    return <<stepReturn $g .ID "next">>
+<<end>><<if eq .Type "action.react">>    await run.react("<<blockCfg . "emoji">>")
+    return <<stepReturn $g .ID "next">>
+<<end>><<if eq .Type "logic.branch">>    <<if eq (blockCfg . "operator") "contains">>if "<<blockCfg . "value">>" in run.get("<<blockCfg . "source">>"):<<else>>if run.get("<<blockCfg . "source">>") == "<<blockCfg . "value">>":<<end>>
+        return <<stepReturn $g .ID "match">>
+    return <<stepReturn $g .ID "else">>
 <<end>><<end>><<end>>
+<<cmdConst .Name>>_STEPS = {<<range .Blocks>><<if not (isTrigger .)>>
+    "<<.ID>>": _<<underscore $g.Name>>_<<.ID>>,<<end>><<end>>
+}
+<<end>><<end>>
 class <<.ClassName>>(commands.Cog, name="<<.ClassName>>"):
     def __init__(self, bot) -> None:
         self.bot = bot<<range .SlashCommands>><<if .Pages>>
@@ -166,6 +189,28 @@ class <<.ClassName>>(commands.Cog, name="<<.ClassName>>"):
             await ctx.send(f"Error: {e}", ephemeral=True)
 
         return <<returnValue .ReturnType>>
+<<end>><<range .BlockGraphs>><<$g := .>><<$t := graphTrigger .>>
+    @app_commands.command(name="<<blockCfg $t "name">>", description="<<blockCfg $t "description">>")<<if triggerArgs $t>>
+    @app_commands.describe(<<range triggerArgs $t>>
+        <<.Name>>="<<.Description>>",<<end>>
+    )<<end>><<if eq (blockCfg $t "scope") "guild">>
+    @app_commands.guilds(GUILD)<<end>>
+    async def <<underscore (blockCfg $t "name")>>(self, interaction: discord.Interaction<<if triggerArgs $t>>, <<argString (triggerArgs $t)>><<end>>) -> None:
+        """
+        <<blockCfg $t "description">> when the user types "/<<blockCfg $t "name">>"
+
+            Returns:
+                    None
+        """
+
+<<if eq (blockCfg $t "defer") "true">>        await interaction.response.defer(ephemeral=<<blockCfgBool $t "defer_ephemeral">>)
+<<end>>        run = BlockRun.from_interaction(interaction, {<<range triggerArgs $t>>"<<.Name>>": <<.Name>>, <<end>>})
+        step = <<stepReturn $g $t.ID "next">>
+        try:
+            while step:
+                step = await <<cmdConst $g.Name>>_STEPS[step](self, run)
+        except Exception as e:
+            logger.error(f"Error in block graph <<$g.Name>>: {e}")
 <<end>>
 
 async def setup(bot):

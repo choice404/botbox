@@ -54,6 +54,7 @@ Built with **Go**, [`Cobra`](https://github.com/spf13/cobra), [`Bubble Tea`](htt
 -   **Admin Tools**: Generated bots ship with /sync, /status, /uptime, and /set-prefix, all locked behind administrator permissions and an OWNER_IDS owner check.
 -   **Docker Support**: Turn any Bot Box project into a container with `botbox docker init`, generating a Dockerfile, docker-compose.yml, and .dockerignore matched to your env or Doppler setup.
 -   **Cog Editing**: Modify existing cogs with `botbox edit`, add, edit, or remove commands interactively or from flags, with automatic file regeneration and backups.
+-   **Blocks**: Build bot behavior as graphs of connected blocks, a trigger flows into actions and branches, defined as JSON and compiled into readable Python inside the cog.
 -   **Slash Command Support**: Seamless integration via `discord.ext.commands`.
 -   **Automated Cog Generation**: Generate new cogs with predefined commands and arguments effortlessly.
 -   **Project Initialization**: Quick setup with `.env` and `botbox.conf` files.
@@ -171,6 +172,39 @@ botbox edit MyCog --replace-commands @commands.json
 # Change the cog environment and skip the backup file
 botbox edit MyCog --env production --no-backup
 ```
+
+#### Build behavior with blocks
+
+```sh
+botbox block types
+botbox block validate --graph @welcome.json --cog MyCog
+botbox block add MyCog --graph @welcome.json
+botbox block add MyCog --graph @welcome.json --replace
+botbox block list --json
+botbox block show MyCog welcome > welcome.json
+botbox block remove MyCog welcome
+```
+
+A block graph is a JSON document with one trigger block and any number of action and logic blocks connected by edges. The trigger becomes a real slash command, actions run in order, and branches route through their match or else port based on a value comparison. The graph compiles into plain async functions inside the cog so the generated code stays readable, and the graph definition is embedded alongside it so config sync always round trips. Optional keys get defaults before validation, scope falls back to global, ephemeral to false, and an edge without a Port uses next.
+
+```json
+{
+  "Name": "welcome",
+  "Blocks": [
+    { "ID": "t1", "Type": "trigger.slash_command", "Config": { "name": "welcome", "description": "Welcomes someone", "scope": "guild" } },
+    { "ID": "b1", "Type": "logic.branch", "Config": { "source": "mood", "operator": "equals", "value": "happy" } },
+    { "ID": "b2", "Type": "action.send_message", "Config": { "content": "Welcome to {guild}, {user}!", "ephemeral": "false" } },
+    { "ID": "b3", "Type": "action.react", "Config": { "emoji": "👋" } }
+  ],
+  "Edges": [
+    { "From": "t1", "Port": "next", "To": "b1" },
+    { "From": "b1", "Port": "match", "To": "b2" },
+    { "From": "b1", "Port": "else", "To": "b3" }
+  ]
+}
+```
+
+Available block types so far: trigger.slash_command, action.send_message, action.send_dm, action.react, and logic.branch. Run botbox block types to see the config keys each one reads. Every run seeds user_id, user_name, guild_id, guild_name, channel_id, and channel_name, so a branch can gate on who ran the command and message content can use them as placeholders next to {user}, {guild}, and the trigger's argument names. A trigger with defer set to true acknowledges the interaction before the graph runs, which keeps slow graphs inside discord's three second window. More block types and an interactive builder are planned.
 
 #### Upgrade project configuration
 
@@ -550,6 +584,7 @@ This will:
 
 ## 📜 Version History
 
+-   **2.12.0** Added the blocks system. Bot behavior can now be built as graphs of connected blocks through the new botbox block add, list, show, validate, types, and remove commands, with a slash command trigger, message, DM, and react actions, and value branching. Graphs are defined as JSON, validated for structure, reachability, and slash command collisions across the whole project, compiled into readable Python, and round trip through config sync. Graphs can be replaced in place with --replace, optional keys get defaults, triggers can defer the interaction, every run seeds user, guild, and channel values for branches and placeholders, and sync keeps the config graphs when a generated blob fails to parse instead of dropping them
 -   **2.11.0** Added the botbox edit command for modifying existing cogs, interactively with prefilled forms or through flags, with automatic cog file regeneration and .py.bak backups. Fixed prefix command argument descriptions being lost during config sync and prefix command scope drifting between guild and global
 -   **2.10.0** Added multipage modal flows. Modal commands can now chain up to ten pages with branch rules that route users based on submitted values, with per user session state and Continue button bridges between pages. Added custom response messages for all command types with {field} placeholder substitution in flow responses. Both available in the TUI and headless mode with full config sync round trip through an embedded flow definition
 -   **2.9.0** Added Docker support. botbox docker init generates a Dockerfile, docker-compose.yml, and .dockerignore for any project, new projects can opt in at creation with the --docker flag or the new prompt, and the files adapt to .env or Doppler projects through the new bot.env_provider config key

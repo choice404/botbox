@@ -129,22 +129,9 @@ func parseCommandsInput(raw string) ([]utils.CommandInfo, error) {
 		return nil, nil
 	}
 
-	var data []byte
-	switch {
-	case raw == "-":
-		stdinData, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return nil, fmt.Errorf("error reading commands from stdin: %w", err)
-		}
-		data = stdinData
-	case strings.HasPrefix(raw, "@"):
-		fileData, err := os.ReadFile(strings.TrimPrefix(raw, "@"))
-		if err != nil {
-			return nil, fmt.Errorf("error reading commands file: %w", err)
-		}
-		data = fileData
-	default:
-		data = []byte(raw)
+	data, err := readJSONInput(raw, "commands")
+	if err != nil {
+		return nil, err
 	}
 
 	var commands []utils.CommandInfo
@@ -152,6 +139,33 @@ func parseCommandsInput(raw string) ([]utils.CommandInfo, error) {
 		return nil, fmt.Errorf("error parsing commands JSON: %w", err)
 	}
 	return commands, nil
+}
+
+/**
+ * readJSONInput
+ * Reads a JSON flag value that accepts inline JSON, @path/to/file.json, or - for stdin
+ * @param raw {string} - the raw flag value
+ * @param label {string} - what the JSON describes, used in error messages
+ * @return []byte - the raw JSON bytes
+ * @return error - any read failure
+ **/
+func readJSONInput(raw string, label string) ([]byte, error) {
+	switch {
+	case raw == "-":
+		stdinData, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return nil, fmt.Errorf("error reading %s from stdin: %w", label, err)
+		}
+		return stdinData, nil
+	case strings.HasPrefix(raw, "@"):
+		fileData, err := os.ReadFile(strings.TrimPrefix(raw, "@"))
+		if err != nil {
+			return nil, fmt.Errorf("error reading %s file: %w", label, err)
+		}
+		return fileData, nil
+	default:
+		return []byte(raw), nil
+	}
 }
 
 func addCallback(model *utils.Model) []error {

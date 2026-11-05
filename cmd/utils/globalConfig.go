@@ -261,6 +261,11 @@ func SyncCogsWithConfig() (*SyncResult, error) {
 		if headerIssue := checkHeaderIssues(parsed, &config.BotInfo); headerIssue != "" {
 			result.HeaderIssues = append(result.HeaderIssues, fmt.Sprintf("%s: %s", parsed.FileName, headerIssue))
 		}
+
+		// Every unreadable blob is surfaced so the user knows which file to fix
+		for _, graphErr := range parsed.BlockGraphErrors {
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v, keeping the block graphs already in botbox.conf", parsed.FileName, graphErr))
+		}
 	}
 
 	for fileName := range existingCogs {
@@ -333,9 +338,57 @@ func parseCogFile(filePath, fileName string) (*ParsedCogInfo, error) {
 
 	parseCogClassName(lines, parsed)
 
+	// Blobs parse first so graph owned slash commands can fold into their graph
+	graphs, graphErrors := parseBlockGraphs(lines)
+	parsed.BlockGraphs = graphs
+	parsed.BlockGraphErrors = graphErrors
+
 	parseCommands(lines, parsed)
 
 	return parsed, nil
+}
+
+// Matches the opening line of a generated <NAME>_BLOCKS JSON blob
+var blockGraphMarkerRegex = regexp.MustCompile(`^[A-Z0-9_]+_BLOCKS = json\.loads\(r'''$`)
+
+// parseBlockGraphs reads every block graph JSON blob generated into the cog file,
+// the blob is the single source of truth so the woven python is never parsed
+func parseBlockGraphs(lines []string) ([]BlockGraph, []error) {
+	var graphs []BlockGraph
+	var parseErrors []error
+
+	for i := 0; i < len(lines); i++ {
+		if !blockGraphMarkerRegex.MatchString(strings.TrimSpace(lines[i])) {
+			continue
+		}
+
+		// Collect every line until the closing quotes so the whole blob unmarshals at once
+		var jsonLines []string
+		end := -1
+		for j := i + 1; j < len(lines); j++ {
+			if strings.TrimSpace(lines[j]) == "''')" {
+				end = j
+				break
+			}
+			jsonLines = append(jsonLines, lines[j])
+		}
+		if end == -1 {
+			// An unclosed blob means the rest of the file is inside it, nothing after it is trustworthy
+			parseErrors = append(parseErrors, fmt.Errorf("line %d: block graph blob is never closed", i+1))
+			break
+		}
+		// A blob that fails to unmarshal is reported, never dropped on the floor
+		var graph BlockGraph
+		if err := json.Unmarshal([]byte(strings.Join(jsonLines, "\n")), &graph); err != nil {
+			parseErrors = append(parseErrors, fmt.Errorf("line %d: block graph blob is not valid JSON: %w", i+1, err))
+		} else {
+			graphs = append(graphs, graph)
+		}
+
+		i = end
+	}
+
+	return graphs, parseErrors
 }
 
 func parseHeaderComment(lines []string, parsed *ParsedCogInfo) {
@@ -417,12 +470,15 @@ func parseCogClassName(lines []string, parsed *ParsedCogInfo) {
 }
 
 func parseCommands(lines []string, parsed *ParsedCogInfo) {
+	// Slash commands registered by a graph trigger stay in the graph, not in slash_commands
+	graphOwned := graphOwnedCommandNames(parsed.BlockGraphs)
+
 	for i := range lines {
 		line := strings.TrimSpace(lines[i])
 
 		if strings.Contains(line, "@app_commands.command") {
 			cmd := parseSlashCommand(lines, i)
-			if cmd != nil {
+			if cmd != nil && !graphOwned[cmd.Name] {
 				parsed.SlashCommands = append(parsed.SlashCommands, *cmd)
 			}
 		}
@@ -891,6 +947,13 @@ func updateCogConfig(existing *CogConfig, parsed ParsedCogInfo) bool {
 		updated = true
 	}
 
+	// A failed blob means the file still holds graphs the parser could not read
+	// so the config keeps what it has instead of sshrinking the readable subset
+	if len(parsed.BlockGraphErrors) == 0 && !blockGraphsEqual(existing.BlockGraphs, parsed.BlockGraphs) {
+		existing.BlockGraphs = parsed.BlockGraphs
+		updated = true
+	}
+
 	return updated
 }
 
@@ -900,6 +963,7 @@ func createCogConfigFromParsed(parsed ParsedCogInfo) CogConfig {
 		File: parsed.FileName,
 		Env:  "development", SlashCommands: parsed.SlashCommands,
 		PrefixCommands: parsed.PrefixCommands,
+		BlockGraphs:    parsed.BlockGraphs,
 	}
 }
 
